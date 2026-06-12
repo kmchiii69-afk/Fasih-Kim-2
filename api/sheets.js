@@ -5,8 +5,8 @@
 // Frontend calls:  /api/sheets?id=<sheetIdOrUrl>&tab=<TabName>&token=<optional>
 //
 // ENV VARS required in Vercel (Project → Settings → Environment Variables):
-//   GOOGLE_SERVICE_ACCOUNT  = the ENTIRE contents of your downloaded service-account JSON key (paste as one value)
-//   DASHBOARD_TOKEN         = (optional) a shared secret; if set, requests must pass &token=<that value>
+//   GOOGLE_SERVICE_ACCOUNT_KEY  = the ENTIRE contents of your service-account JSON key (or its base64)
+//   DASHBOARD_TOKEN             = (optional) a shared secret; if set, requests must pass &token=<that value>
 
 import { google } from "googleapis";
 
@@ -26,13 +26,16 @@ function extractId(s) {
 let cachedAuth = null;
 function getAuth() {
   if (cachedAuth) return cachedAuth;
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT env var is not set");
+  let raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY env var is not set");
+  raw = raw.trim();
+  // Accept either raw JSON or base64-encoded JSON.
+  const json = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
   let creds;
   try {
-    creds = JSON.parse(raw);
+    creds = JSON.parse(json);
   } catch (e) {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT is not valid JSON");
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON");
   }
   // handle the \n-escaped private key that Vercel env vars often produce
   if (creds.private_key) {
