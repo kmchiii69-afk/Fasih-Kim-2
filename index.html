@@ -106,6 +106,9 @@
   .maprow{padding:9px 0;border-top:1px solid var(--line)}
   .maprow .ml{font-size:12px;color:var(--txt);font-weight:500;margin-bottom:6px}
   .maprow .mr{display:flex;gap:7px}.maprow .mr select{flex:1;min-width:0}.maprow .mr select.m-date{flex:0 0 32%}
+  .maprow .mr .colsearch{flex:1;min-width:0;background:rgba(255,255,255,.03);border:1px solid var(--line-str);color:var(--txt);padding:8px 9px;border-radius:8px;font-size:11.5px;font-family:inherit;color-scheme:dark}
+  .maprow .mr .colsearch.m-date{flex:0 0 32%}
+  .maprow .mr .colsearch:focus{outline:none;border-color:var(--gold)}
   .modal-foot{padding:16px 24px;border-top:1px solid var(--line-str);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#14110c}
   .close-x{cursor:pointer;color:var(--muted);font-size:24px;line-height:1}.close-x:hover{color:var(--txt)}
   .note{font-size:11.5px;color:var(--muted);background:rgba(255,255,255,.025);border:1px solid var(--line-str);border-radius:9px;padding:13px;line-height:1.65}
@@ -361,14 +364,14 @@ function renderCeo(){const {from,to}=getRange();const rows=RAW.ceo.filter(r=>inR
 }
 function renderSetter(){const {from,to}=getRange();const rows=RAW.setter.filter(r=>inR(r.date,from,to));
   document.getElementById("setterSub").innerHTML=subHtml(from,to);
-  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),closed=sum(rows,"callsClosed");
+  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),showed=sum(rows,"callsShowed");
   const ob=sum(rows,"outbounds"),obr=sum(rows,"outboundResponses"),dmCash=sum(rows,"cashInDMs"),proposed=sum(rows,"callsProposed"),icp=sum(rows,"icpLeads");
   const pace=pacing(to,"cashInDMs",RAW.setter),goal=toNum(CFG.goal);
   document.getElementById("setterCards").innerHTML=[
-    card("Qualified Booked Calls",booked.toLocaleString()),card("Qualified Calls Taken",taken.toLocaleString()),card("Calls Closed",closed.toLocaleString()),
-    card("Close Rate",fmtPct(safeDiv(closed,taken)),{sub:"closed ÷ taken"}),card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),
+    card("Qualified Booked Calls",booked.toLocaleString()),card("Calls Showed",showed.toLocaleString()),
+    card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),
     card("Cash Collected in DMs",fmtMoney(dmCash),{gold:true}),card("Monthly Pacing",fmtMoney(pace),{gold:true,sub:goal?fmtPct(safeDiv(pace,goal))+" of goal":"DM cash → month-end"}),
-    card("Commission",fmtMoney(sum(rows,"commission"))),card("ICP Leads",icp.toLocaleString()),card("New Conversations",sum(rows,"newConversations").toLocaleString()),
+    card("Setter Commission",fmtMoney(Math.round(dmCash*0.05)),{sub:"5% of DM cash"}),card("ICP Leads",icp.toLocaleString()),card("New Conversations",sum(rows,"newConversations").toLocaleString()),
     card("Calls Proposed",proposed.toLocaleString()),card("Pitch Rate",fmtPct(safeDiv(proposed,icp)),{sub:"proposed ÷ ICP leads"}),
     card("Follow Ups",sum(rows,"followUps").toLocaleString()),card("Outbound Reply Rate",fmtPct(safeDiv(obr,ob)),{sub:"responses ÷ outbounds"})].join("");
   barCharts("setterCharts",[["Qualified Booked Calls","qualifiedBookedCalls"],["Un-Qualified Booked Calls","unqualifiedBookedCalls"],["Calls on the Calendar","callsOnCalendar"],["Number of Outbounds","outbounds"],["Calls Showed","callsShowed"],["Follow Ups Sent","followUps"],["ICP Leads Attracted","icpLeads"]],rows,from,to);
@@ -395,6 +398,20 @@ const firstDateCol=id=>headersOf(id).find(isDateCol)||"";
 function srcOpts(sel){return '<option value="">— source —</option>'+CFG.sources.filter(s=>s.name||s.sheetId).map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name||'(unnamed)')}</option>`).join("")}
 function colOpts(sid,sel,dateOnly){let hs=headersOf(sid);if(dateOnly){const ds=hs.filter(isDateCol);if(ds.length)hs=ds}
   return '<option value="">—</option>'+hs.map(h=>`<option ${h===sel?'selected':''}>${esc(h)}</option>`).join("")}
+// Searchable column picker: a text input backed by a <datalist>, so you can type
+// to filter instead of scrolling. .value reads back exactly like a <select>.
+let _dlSeq=0;
+function colInput(cls,sid,sel,dateOnly){let hs=headersOf(sid);if(dateOnly){const ds=hs.filter(isDateCol);if(ds.length)hs=ds}
+  const lid="dl"+(_dlSeq++);
+  const opts=hs.map(h=>`<option value="${esc(h)}"></option>`).join("");
+  return `<input class="${cls} colsearch" list="${lid}" value="${esc(sel||'')}" placeholder="type to search…" autocomplete="off">`+
+         `<datalist id="${lid}">${opts}</datalist>`}
+// Refresh an existing searchable column input in place when its source changes.
+function rebuildColInput(inputEl,sid,sel,dateOnly){
+  if(!inputEl)return;let hs=headersOf(sid);if(dateOnly){const ds=hs.filter(isDateCol);if(ds.length)hs=ds}
+  const lid=inputEl.getAttribute("list");const dl=document.getElementById(lid);
+  if(dl)dl.innerHTML=hs.map(h=>`<option value="${esc(h)}"></option>`).join("");
+  inputEl.value=sel||"";}
 
 function renderSources(){
   const el=document.getElementById("srcList");
@@ -418,16 +435,16 @@ function renderSources(){
 }
 function metricRow(tab,id,lbl){const m=CFG.map[tab+"."+id]||{};const dsel=m.dateCol||firstDateCol(m.src);
   return `<div class="maprow" data-id="${id}"><div class="ml">${lbl}</div><div class="mr">
-    <select class="m-src">${srcOpts(m.src)}</select><select class="m-col">${colOpts(m.src,m.col,false)}</select>
-    <select class="m-date" title="date column">${colOpts(m.src,dsel,true)}</select></div></div>`}
+    <select class="m-src">${srcOpts(m.src)}</select>${colInput("m-col",m.src,m.col,false)}
+    ${colInput("m-date",m.src,dsel,true)}</div></div>`}
 function renderMap(tab){curTab=tab;
   if(tab==="tables"){renderTables();return}
   document.getElementById("mapList").innerHTML=TABMETRICS[tab].map(([id,lbl])=>metricRow(tab,id,lbl)).join("");
   document.querySelectorAll("#mapList .maprow").forEach(row=>{
     const ss=row.querySelector(".m-src"),cs=row.querySelector(".m-col"),ds=row.querySelector(".m-date");
-    ss.onchange=()=>{cs.innerHTML=colOpts(ss.value,"",false);ds.innerHTML=colOpts(ss.value,firstDateCol(ss.value),true)}});
+    ss.onchange=()=>{rebuildColInput(cs,ss.value,"",false);rebuildColInput(ds,ss.value,firstDateCol(ss.value),true)}});
 }
-function tblPick(label,cls,sid,sel,dateOnly){return `<div class="maprow"><div class="ml">${label}</div><div class="mr"><select class="${cls}" style="flex:1">${colOpts(sid,sel,dateOnly)}</select></div></div>`}
+function tblPick(label,cls,sid,sel,dateOnly){return `<div class="maprow"><div class="ml">${label}</div><div class="mr">${colInput(cls,sid,sel,dateOnly)}</div></div>`}
 function renderTables(){
   const c=CFG.closesSrc||{},p=CFG.plansSrc||{};
   document.getElementById("mapList").innerHTML=`
