@@ -228,7 +228,7 @@ async function apiGet(id,tab){const r=await fetch(apiUrl(id,tab));if(!r.ok)throw
 
 const M_CEO=[["qualifiedBookedCalls","Qualified Booked Calls"],["qualifiedCallsTaken","Qualified Calls Taken"],["callsClosed","Calls Closed"],["totalCash","Total Cash"],["newCash","New Cash"],["upsellCash","Up-sell Cash"],["commission","Commission"],["icpLeads","ICP Leads"]];
 const M_SETTER=[["qualifiedBookedCalls","Qualified Booked Calls"],["unqualifiedBookedCalls","Un-Qualified Booked Calls"],["qualifiedCallsTaken","Qualified Calls Taken (= Calls Showed)"],["callsClosed","Calls Closed"],["callsShowed","Calls Showed"],["callsOnCalendar","Calls on the Calendar"],["newConversations","New Conversations"],["callsProposed","Calls Proposed"],["followUps","Follow Ups Sent"],["outbounds","Outbounds"],["outboundResponses","Outbound Responses"],["icpLeads","ICP Leads Attracted"],["cashInDMs","Cash Collected in DMs"],["commission","Commission"]];
-const M_CLOSER=[["qualifiedCallsTaken","Qualified Calls Taken"],["disqualifiedCalls","Disqualified Calls"],["callsClosed","Calls Closed"],["offersPitched","Offers Pitched"],["closerCash","Closer Cash Collected"],["revenue","Revenue"]];
+const M_CLOSER=[["qualifiedCallsTaken","Qualified Calls Taken"],["disqualifiedCalls","Disqualified Calls"],["callsClosed","Calls Closed"],["offersPitched","Offers Pitched"],["reschedules","Reschedules"],["noShows","No Shows"],["cancellations","Cancellations"],["closerCash","Closer Cash Collected"],["revenue","Revenue"]];
 const TABMETRICS={ceo:M_CEO,setter:M_SETTER,closer:M_CLOSER};
 
 let RAW={ceo:[],setter:[],closer:[],closes:[],plans:[]};
@@ -364,12 +364,12 @@ function renderCeo(){const {from,to}=getRange();const rows=RAW.ceo.filter(r=>inR
 }
 function renderSetter(){const {from,to}=getRange();const rows=RAW.setter.filter(r=>inR(r.date,from,to));
   document.getElementById("setterSub").innerHTML=subHtml(from,to);
-  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),showed=sum(rows,"callsShowed");
+  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),showed=sum(rows,"callsShowed"),onCal=sum(rows,"callsOnCalendar");
   const ob=sum(rows,"outbounds"),obr=sum(rows,"outboundResponses"),dmCash=sum(rows,"cashInDMs"),proposed=sum(rows,"callsProposed"),icp=sum(rows,"icpLeads");
   const pace=pacing(to,"cashInDMs",RAW.setter),goal=toNum(CFG.goal);
   document.getElementById("setterCards").innerHTML=[
     card("Qualified Booked Calls",booked.toLocaleString()),card("Calls Showed",showed.toLocaleString()),
-    card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),
+    card("Show Rate",fmtPct(safeDiv(showed,onCal)),{sub:"showed ÷ on calendar"}),
     card("Cash Collected in DMs",fmtMoney(dmCash),{gold:true}),card("Monthly Pacing",fmtMoney(pace),{gold:true,sub:goal?fmtPct(safeDiv(pace,goal))+" of goal":"DM cash → month-end"}),
     card("Setter Commission",fmtMoney(Math.round(dmCash*0.05)),{sub:"5% of DM cash"}),card("ICP Leads",icp.toLocaleString()),card("New Conversations",sum(rows,"newConversations").toLocaleString()),
     card("Calls Proposed",proposed.toLocaleString()),card("Pitch Rate",fmtPct(safeDiv(proposed,icp)),{sub:"proposed ÷ ICP leads"}),
@@ -379,9 +379,11 @@ function renderSetter(){const {from,to}=getRange();const rows=RAW.setter.filter(
 function renderCloser(){const {from,to}=getRange();const rows=RAW.closer.filter(r=>inR(r.date,from,to));
   document.getElementById("closerSub").innerHTML=subHtml(from,to);
   const taken=sum(rows,"qualifiedCallsTaken"),disq=sum(rows,"disqualifiedCalls"),closed=sum(rows,"callsClosed"),offers=sum(rows,"offersPitched"),cash=sum(rows,"closerCash"),rev=sum(rows,"revenue");
+  const resched=sum(rows,"reschedules"),noshow=sum(rows,"noShows"),cancel=sum(rows,"cancellations");
   document.getElementById("closerCards").innerHTML=[
     card("Qualified Calls Taken",taken.toLocaleString()),card("Disqualified Calls",disq.toLocaleString()),card("Calls Closed",closed.toLocaleString()),
     card("Offers Pitched",offers.toLocaleString()),card("Pitch Rate",fmtPct(safeDiv(offers,taken)),{sub:"offers ÷ qualified"}),
+    card("Reschedules",resched.toLocaleString()),card("No Shows",noshow.toLocaleString()),card("Cancellations",cancel.toLocaleString()),
     card("Cash Collected",fmtMoney(cash),{gold:true}),card("Revenue",fmtMoney(rev),{gold:true})].join("");
   barCharts("closerCharts",[["Qualified Calls Taken","qualifiedCallsTaken"],["Calls Closed","callsClosed"]],rows,from,to);
 }
