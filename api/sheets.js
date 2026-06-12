@@ -1,82 +1,96 @@
-// api/sheets.js
-// Reads your PRIVATE Google Sheets via a service account and returns clean JSON.
-// Runs on Vercel as a serverless function. The dashboard (index.html) fetches it
-// from the same origin: /api/sheets?id=SPREADSHEET_ID&tab=TabName
+// /api/sheets.js  — Vercel serverless function (Node runtime)
+// Reads a single tab of a Google Sheet live via the Sheets API using a service account.
+// Returns: { headers: [...], rows: [ { Header1: val, Header2: val, ... }, ... ] }
 //
-// Env vars required (set in Vercel → Settings → Environment Variables):
-//   GOOGLE_SERVICE_ACCOUNT_KEY  → the full service-account JSON (or its base64)
-//   DASHBOARD_TOKEN             → optional shared secret to lock the endpoint
+// Frontend calls:  /api/sheets?id=<sheetIdOrUrl>&tab=<TabName>&token=<optional>
+//
+// ENV VARS required in Vercel (Project → Settings → Environment Variables):
+//   GOOGLE_SERVICE_ACCOUNT  = the ENTIRE contents of your downloaded service-account JSON key (paste as one value)
+//   DASHBOARD_TOKEN         = (optional) a shared secret; if set, requests must pass &token=<that value>
 
-const { google } = require('googleapis');
+import { google } from "googleapis";
 
-// Parse the service-account credentials from the env var (raw JSON or base64).
-function getCreds() {
-  let raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY env var is not set');
-  raw = raw.trim();
-  const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
-  const creds = JSON.parse(json);
-  // Vercel sometimes escapes newlines in the private key — normalise them.
-  if (creds.private_key) creds.private_key = creds.private_key.replace(/\\n/g, '\n');
-  return creds;
+function send(res, status, obj) {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.status(status).send(JSON.stringify(obj));
 }
 
-function makeSheetsClient() {
-  const creds = getCreds();
-  const auth = new google.auth.JWT(
-    creds.client_email,
-    null,
-    creds.private_key,
-    ['https://www.googleapis.com/auth/spreadsheets.readonly']
-  );
-  return google.sheets({ version: 'v4', auth });
+// pull the sheet ID out of a full URL, or accept a bare ID
+function extractId(s) {
+  s = String(s || "").trim();
+  const m = s.match(/\/d\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : s;
 }
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Cache-Control', 'no-store, max-age=0'); // always fresh
-  if (req.method === 'OPTIONS') return res.status(204).end();
-
-  // Optional shared-secret gate (only enforced if DASHBOARD_TOKEN is set).
-  const required = process.env.DASHBOARD_TOKEN;
-  if (required && req.query.token !== required) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const id = req.query.id;   // spreadsheet ID (the part of the URL between /d/ and /edit)
-  const tab = req.query.tab; // tab/sheet name; omit to list the tabs in the spreadsheet
-  if (!id) return res.status(400).json({ error: 'Missing ?id (spreadsheet id)' });
-
+let cachedAuth = null;
+function getAuth() {
+  if (cachedAuth) return cachedAuth;
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT env var is not set");
+  let creds;
   try {
-    const sheets = makeSheetsClient();
+    creds = JSON.parse(raw);
+  } catch (e) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT is not valid JSON");
+  }
+  // handle the \n-escaped private key that Vercel env vars often produce
+  if (creds.private_key) {
+    creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+  }
+  cachedAuth = new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
+  return cachedAuth;
+}
 
-    // No tab → return the list of tab names so the dashboard can offer a dropdown.
-    if (!tab) {
-      const meta = await sheets.spreadsheets.get({
-        spreadsheetId: id,
-        fields: 'sheets.properties.title',
-      });
-      const tabs = (meta.data.sheets || []).map(s => s.properties.title);
-      return res.status(200).json({ tabs });
+export default async function handler(req, res) {
+  try {
+    // optional token gate
+    const required = process.env.DASHBOARD_TOKEN;
+    if (required && req.query.token !== required) {
+      return send(res, 401, { error: "Unauthorized: bad or missing token" });
     }
 
-    // Tab provided → return that tab's rows as an array of {header: value} objects.
+    const id = extractId(req.query.id);
+    const tab = String(req.query.tab || "").trim();
+    if (!id) return send(res, 400, { error: "Missing ?id (sheet ID or URL)" });
+    if (!tab) return send(res, 400, { error: "Missing ?tab (sheet/tab name)" });
+
+    const auth = getAuth();
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // Read the whole tab. Quote the tab name to survive spaces/symbols.
+    const range = `'${tab.replace(/'/g, "''")}'`;
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: id,
-      range: `'${String(tab).replace(/'/g, "''")}'`, // whole tab, name safely quoted
+      range,
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
     });
-    const values = resp.data.values || [];
-    if (!values.length) return res.status(200).json({ headers: [], rows: [] });
 
-    const headers = values[0].map(h => String(h).trim());
-    const rows = values.slice(1).map(r => {
+    const values = resp.data.values || [];
+    if (values.length === 0) {
+      return send(res, 200, { headers: [], rows: [] });
+    }
+
+    const headers = (values[0] || []).map((h) => String(h).trim());
+    const rows = values.slice(1).map((r) => {
       const o = {};
-      headers.forEach((h, i) => { o[h] = r[i] != null ? r[i] : ''; });
+      headers.forEach((h, i) => {
+        o[h] = r[i] !== undefined ? r[i] : "";
+      });
       return o;
     });
-    return res.status(200).json({ headers, rows });
-  } catch (e) {
-    return res.status(500).json({ error: String((e && e.message) || e) });
+
+    return send(res, 200, { headers, rows });
+  } catch (err) {
+    // ALWAYS return JSON, even on error, so the frontend's r.json() never gets binary garbage
+    const msg = err && err.message ? err.message : String(err);
+    const code =
+      /permission|forbidden|403/i.test(msg) ? 403 :
+      /not found|404|unable to parse range/i.test(msg) ? 404 : 500;
+    return send(res, code, { error: msg });
   }
-};
+}
