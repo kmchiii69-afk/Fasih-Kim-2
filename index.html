@@ -344,13 +344,15 @@ function renderCeo(){const {from,to}=getRange();const rows=RAW.ceo.filter(r=>inR
   const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),closed=sum(rows,"callsClosed"),cash=sum(rows,"totalCash");
   const pace=pacing(to,"totalCash",RAW.ceo),goal=toNum(CFG.goal);
   const ppPaid=RAW.plans.filter(r=>inR(r.dueDate,from,to)&&isPaid(r.status)).reduce((a,r)=>a+(r.amountDue||0),0);
+  const dmCashRange=RAW.setter.filter(r=>inR(r.date,from,to)).reduce((a,r)=>a+(r.cashInDMs||0),0);
+  const setterCommission=Math.round(dmCashRange*0.05);
   document.getElementById("ceoCards").innerHTML=[
     card("Qualified Booked Calls",booked.toLocaleString()),card("Qualified Calls Taken",taken.toLocaleString()),
     card("Calls Closed",closed.toLocaleString()),card("Close Rate",fmtPct(safeDiv(closed,taken)),{sub:"closed ÷ taken"}),
     card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),card("Total Cash",fmtMoney(cash),{gold:true}),
     card("Monthly Pacing",fmtMoney(pace),{gold:true,sub:goal?fmtPct(safeDiv(pace,goal))+" of goal":"projected to month-end"}),
     card("New Cash",fmtMoney(sum(rows,"newCash"))),card("Payment Plans Paid",fmtMoney(ppPaid),{sub:"paid plans in range"}),
-    card("Up-sell Cash",fmtMoney(sum(rows,"upsellCash"))),card("Commission",fmtMoney(sum(rows,"commission"))),
+    card("Up-sell Cash",fmtMoney(sum(rows,"upsellCash"))),card("Setter Commission",fmtMoney(setterCommission),{sub:"5% of DM cash"}),
     card("Average Order Value",fmtMoney(safeDiv(cash,closed)),{sub:"cash ÷ closed"}),card("ICP Leads",sum(rows,"icpLeads").toLocaleString())].join("");
   const cl=RAW.closes.filter(r=>inR(r.date,from,to)),cb=document.getElementById("closesBody");
   if(cl.length){cb.innerHTML=cl.slice(0,200).map(r=>`<tr><td>${fmtDate(r.date)}</td><td class="kpi">${esc(r.name||"—")}</td><td class="num">${fmtMoney(r.cashCollected)}</td></tr>`).join("");document.getElementById("closesCount").textContent=cl.length+" in range"}else cb.innerHTML=`<tr><td colspan="3" class="empty">No closes in this range</td></tr>`;
