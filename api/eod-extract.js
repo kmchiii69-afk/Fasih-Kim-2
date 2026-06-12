@@ -93,23 +93,13 @@ function leadNameFromMeeting(m) {
   return ext?.name || m.meeting_title || m.title || "Unknown Lead";
 }
 
-// Titles that mean "internal" — these calls are dropped no matter who's on them.
-// Matching is case-insensitive and substring-based, so "Weekly Sales Huddle"
-// and "Team Call - Monday" both get caught. Add more phrases as needed.
+// Titles that mean "internal/group" — these calls are dropped no matter who's on
+// them. Matching is case-insensitive and substring-based, so "Weekly Sales Huddle"
+// and "Team Calls - Monday" both get caught. Add more phrases as needed.
 const TITLE_BLOCKLIST = [
   "sales huddle",
-  "team call",
-  "team meeting",
-  "standup",
-  "stand-up",
-  "internal",
-  "huddle",
-  "1:1",
-  "1-1",
-  "all hands",
-  "all-hands",
-  "weekly sync",
-  "daily sync",
+  "team calls",
+  "mastermind",
 ];
 
 function isInternalTitle(m) {
