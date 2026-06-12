@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOH Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#080605;--panel-a:#14110c;--panel-b:#0b0908;--line:#241d15;--line-str:#352a1e;
+    --row:rgba(255,255,255,.045);--txt:#f1ede5;--muted:#8a8174;--muted2:#5e574c;
+    --gold:#d8a94f;--gold-lite:#f0d79b;--gold-deep:#bf8a2e;--green:#6cbf8e;--red:#dd726a;
+    --grad-gold:linear-gradient(170deg,#f3dca0 0%,#d6a449 55%,#bd861f 100%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins',system-ui,-apple-system,sans-serif;color:var(--txt);background:var(--bg);-webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:radial-gradient(120% 70% at 50% -8%,rgba(150,108,46,.20) 0%,rgba(150,108,46,0) 48%),radial-gradient(90% 60% at 50% 0%,rgba(60,46,24,.35) 0%,rgba(8,6,5,0) 55%);background-attachment:fixed}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 26px 80px}
+  nav{display:flex;align-items:stretch;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(20,16,11,.7),rgba(8,6,5,.3));backdrop-filter:blur(6px);position:sticky;top:0;z-index:30}
+  .nav-in{max-width:1480px;margin:0 auto;width:100%;display:flex;align-items:stretch;padding:0 26px;gap:6px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px;padding:18px 28px 18px 0;font-size:13px;font-weight:700;letter-spacing:2.6px;color:var(--gold);text-transform:uppercase;border-right:1px solid rgba(255,255,255,.07);white-space:nowrap}
+  .brand .dia{color:var(--gold-lite);font-size:9px;transform:translateY(-1px)}
+  .tabs{display:flex;align-items:stretch}
+  .tab{display:flex;align-items:center;gap:8px;padding:18px 22px;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);cursor:pointer;transition:.18s;border-top:2px solid transparent;border-bottom:2px solid transparent;white-space:nowrap}
+  .tab .dia{display:none;color:var(--gold);font-size:8px}
+  .tab:hover{color:#c8c0b2}
+  .tab.active{color:#fff;background:linear-gradient(180deg,rgba(216,169,79,.10),rgba(216,169,79,.02));border-top-color:var(--gold)}
+  .tab.active .dia{display:inline}
+  .nav-ctrl{margin-left:auto;display:flex;align-items:center;gap:8px;padding:12px 0;flex-wrap:wrap}
+  select.sel,input[type=date]{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);color:var(--txt);padding:9px 12px;border-radius:9px;font-size:12px;font-weight:500;letter-spacing:.4px;font-family:inherit;color-scheme:dark;cursor:pointer;transition:border-color .15s}
+  select.sel{-webkit-appearance:none;appearance:none;padding-right:30px;background-image:linear-gradient(165deg,var(--panel-a),var(--panel-b)),url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23d8a94f' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");background-repeat:no-repeat,no-repeat;background-position:center,right 11px center;background-size:auto,11px}
+  select option{background:#14110c;color:var(--txt)}
+  input[type=date]::-webkit-calendar-picker-indicator{width:15px;height:15px;cursor:pointer;opacity:.8;background:transparent url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%23d8a94f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>") no-repeat center;background-size:contain;transition:opacity .15s}
+  select.sel:hover,input[type=date]:hover{border-color:rgba(216,169,79,.45)}
+  select.sel:focus,input[type=date]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,169,79,.12)}
+  .to-sep{color:var(--gold-deep);font-size:13px;padding:0 2px}
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-str);background:rgba(255,255,255,.03);color:var(--txt);padding:8px 13px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;letter-spacing:.4px;transition:.15s}
+  .btn:hover{border-color:var(--gold);color:var(--gold-lite)}
+  .btn.gold{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
+  .btn.gold:hover{filter:brightness(1.06)}
+  .btn.gold.spin svg{animation:rot .8s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .page{display:none}.page.active{display:block;animation:fade .4s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  .hero{text-align:center;padding:54px 0 0}
+  .hero h1{font-size:clamp(38px,5.6vw,62px);font-weight:700;letter-spacing:-.5px;line-height:1.05}
+  .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .subline{margin-top:20px;font-size:14px;color:var(--muted);font-weight:400;letter-spacing:.4px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+  .subline .dia{color:var(--gold);font-size:9px}
+  .st{font-weight:600;letter-spacing:.6px}.st.demo{color:#9ab2e0}.st.live{color:var(--green)}.st.err{color:var(--red)}
+  .divider{height:1px;width:100%;max-width:760px;margin:32px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
+  .sec{display:flex;align-items:center;gap:20px;margin:48px 4px 20px}
+  .sec h2{font-size:13px;letter-spacing:2.6px;text-transform:uppercase;color:var(--txt);font-weight:700;white-space:nowrap}
+  .sec .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line-str),transparent)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px}
+  .card{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);border-radius:14px;padding:20px 20px 18px;transition:border-color .2s}
+  .card:hover{border-color:rgba(216,169,79,.3)}
+  .card .lbl{font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:15px;line-height:1.4;min-height:29px}
+  .card .val{font-size:29px;font-weight:700;letter-spacing:.2px;line-height:1;color:var(--txt)}
+  .card.gold{border-color:rgba(216,169,79,.3)}
+  .card.gold .val{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .card .sub{font-size:10.5px;color:var(--muted2);margin-top:10px;letter-spacing:.3px}
+  .tables{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:980px){.tables{grid-template-columns:1fr}}
+  .tbl-card{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow:hidden}
+  .tbl-bar{padding:16px 22px;border-bottom:1px solid var(--line-str);display:flex;justify-content:space-between;align-items:center}
+  .tbl-bar .t{font-size:12px;letter-spacing:1.8px;text-transform:uppercase;font-weight:700}
+  .tbl-bar .c{font-size:10.5px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase}
+  .tbl-scroll{max-height:400px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{position:sticky;top:0;background:#0e0b08;text-align:left;padding:13px 22px;color:var(--muted);font-weight:600;font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;z-index:1;border-bottom:1px solid var(--line-str)}
+  td{padding:16px 22px;border-top:1px solid var(--row);color:#d7d1c6;font-weight:400}
+  td.kpi{color:var(--txt);font-weight:500}td.num{text-align:right;font-variant-numeric:tabular-nums}th.num{text-align:right}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .status{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 11px;border-radius:6px;display:inline-block}
+  .status.paid{color:var(--green);background:rgba(108,191,142,.13)}.status.unpaid{color:var(--red);background:rgba(221,114,106,.13)}
+  .empty{padding:36px;text-align:center;color:var(--muted2);font-size:13px}
+  .charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:18px}
+  @media(max-width:780px){.charts{grid-template-columns:1fr}}
+  .chart-card{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);border-radius:14px;padding:18px 20px 12px}
+  .chart-card h4{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:16px}
+  .chart-box{height:225px;position:relative}
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(5px);z-index:60;align-items:center;justify-content:center;padding:20px}
+  .overlay.show{display:flex}
+  .modal{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:16px;width:640px;max-width:100%;max-height:88vh;overflow:auto}
+  .modal-head{padding:18px 24px;border-bottom:1px solid var(--line-str);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#14110c;z-index:2}
+  .modal-head h3{font-size:13px;letter-spacing:2px;text-transform:uppercase;font-weight:700}
+  .modal-body{padding:22px 24px}
+  .field{margin-bottom:20px}
+  .field>label{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:7px;color:var(--gold-lite)}
+  .field .hint{font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+  .modal input[type=text],.modal input[type=number]{background:rgba(255,255,255,.03);border:1px solid var(--line-str);color:var(--txt);padding:9px 11px;border-radius:8px;font-size:12px;font-family:inherit}
+  .modal input:focus,.modal select:focus{outline:none;border-color:var(--gold)}
+  .modal select{background:rgba(255,255,255,.03);border:1px solid var(--line-str);color:var(--txt);padding:8px 9px;border-radius:8px;font-size:11.5px;font-family:inherit;color-scheme:dark;cursor:pointer}
+  .toggle{display:flex;align-items:center;gap:11px;font-size:12.5px;cursor:pointer;padding:12px;background:rgba(255,255,255,.03);border-radius:9px;border:1px solid var(--line-str);margin-bottom:20px}
+  .toggle input{accent-color:var(--gold)}
+  .srcrow{display:flex;gap:8px;margin-bottom:9px;flex-wrap:wrap;align-items:center}
+  .srcrow .s-name{flex:0 0 24%;min-width:100px}.srcrow .s-id{flex:1;min-width:140px}.srcrow .s-tab{flex:0 0 22%;min-width:90px}
+  .srcrow .btn{padding:8px 11px}
+  .mtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .mt{padding:7px 15px;border-radius:8px;border:1px solid var(--line-str);background:rgba(255,255,255,.03);color:var(--muted);font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;font-family:inherit}
+  .mt.active{background:linear-gradient(180deg,rgba(216,169,79,.14),rgba(216,169,79,.04));color:var(--gold-lite);border-color:rgba(216,169,79,.4)}
+  .maprow{padding:9px 0;border-top:1px solid var(--line)}
+  .maprow .ml{font-size:12px;color:var(--txt);font-weight:500;margin-bottom:6px}
+  .maprow .mr{display:flex;gap:7px}.maprow .mr select{flex:1;min-width:0}.maprow .mr select.m-date{flex:0 0 32%}
+  .modal-foot{padding:16px 24px;border-top:1px solid var(--line-str);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#14110c}
+  .close-x{cursor:pointer;color:var(--muted);font-size:24px;line-height:1}.close-x:hover{color:var(--txt)}
+  .note{font-size:11.5px;color:var(--muted);background:rgba(255,255,255,.025);border:1px solid var(--line-str);border-radius:9px;padding:13px;line-height:1.65}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-in">
+    <div class="brand">GOH <span class="dia">◆</span> Dashboard</div>
+    <div class="tabs">
+      <div class="tab active" data-page="ceo"><span class="dia">◆</span> CEO</div>
+      <div class="tab" data-page="setter"><span class="dia">◆</span> Setter</div>
+      <div class="tab" data-page="closer"><span class="dia">◆</span> Closer</div>
+    </div>
+    <div class="nav-ctrl">
+      <select class="sel" id="preset">
+        <option value="this_month">This Month</option><option value="last_month">Last Month</option>
+        <option value="last_7">Last 7 Days</option><option value="last_30">Last 30 Days</option>
+        <option value="this_year">This Year</option><option value="all_time">All Time</option><option value="custom">Custom</option>
+      </select>
+      <input type="date" id="fromDate"><span class="to-sep">→</span><input type="date" id="toDate">
+      <button class="btn gold" id="syncBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg> Sync</button>
+      <button class="btn" id="settingsBtn">⚙</button>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="page active" id="page-ceo">
+    <div class="hero"><h1>CEO <span class="gold">Dashboard</span></h1><div class="subline" id="ceoSub"></div><div class="divider"></div></div>
+    <div class="sec"><h2>Performance Snapshot</h2><div class="rule"></div></div>
+    <div class="cards" id="ceoCards"></div>
+    <div class="sec"><h2>Recent Closes &amp; Payment Plans</h2><div class="rule"></div></div>
+    <div class="tables">
+      <div class="tbl-card"><div class="tbl-bar"><span class="t">Recent Closes</span><span class="c" id="closesCount"></span></div>
+        <div class="tbl-scroll"><table><thead><tr><th>Date</th><th>Name</th><th class="num">Cash Collected</th></tr></thead><tbody id="closesBody"></tbody></table></div></div>
+      <div class="tbl-card"><div class="tbl-bar"><span class="t">Payment Plans</span><span class="c" id="plansCount"></span></div>
+        <div class="tbl-scroll"><table><thead><tr><th>Name</th><th>Due Date</th><th>Status</th><th class="num">Amount Due</th></tr></thead><tbody id="plansBody"></tbody></table></div></div>
+    </div>
+  </div>
+  <div class="page" id="page-setter">
+    <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="subline" id="setterSub"></div><div class="divider"></div></div>
+    <div class="sec"><h2>Performance Snapshot</h2><div class="rule"></div></div>
+    <div class="cards" id="setterCards"></div>
+    <div class="sec"><h2>Daily Breakdown</h2><div class="rule"></div></div>
+    <div class="charts" id="setterCharts"></div>
+  </div>
+  <div class="page" id="page-closer">
+    <div class="hero"><h1>Closer <span class="gold">Dashboard</span></h1><div class="subline" id="closerSub"></div><div class="divider"></div></div>
+    <div class="sec"><h2>Performance Snapshot</h2><div class="rule"></div></div>
+    <div class="cards" id="closerCards"></div>
+    <div class="sec"><h2>Daily Breakdown</h2><div class="rule"></div></div>
+    <div class="charts" id="closerCharts"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h3>Connect &amp; Map Data</h3><span class="close-x" id="closeModal">&times;</span></div>
+    <div class="modal-body">
+      <label class="toggle"><input type="checkbox" id="demoToggle"> Use demo data (turn OFF once sources are mapped)</label>
+      <div class="field">
+        <label>Data Sources</label>
+        <div class="hint">Each source is one tab of a Google Sheet, read live by your <b>/api/sheets</b> backend. Paste the sheet's link (or its ID), type the tab name, hit Connect to read its columns. No publishing — just share each sheet with your service-account email. (Connect only works on the deployed site, not this preview.)</div>
+        <div id="srcList"></div>
+        <button class="btn" id="addSrc" style="margin-top:8px">+ Add data source</button>
+      </div>
+      <div class="field">
+        <label>Backend token (optional)</label>
+        <div class="hint">Only needed if you set <b>DASHBOARD_TOKEN</b> in Vercel.</div>
+        <input type="text" id="tokenInput" placeholder="leave blank if unused" style="width:100%">
+      </div>
+      <div class="field">
+        <label>Metric Mapping</label>
+        <div class="hint">Pick a dashboard, then map each metric: <b>source → value column → date column</b>. The date column controls how that metric is aggregated by day.</div>
+        <div class="mtabs">
+          <button class="mt active" data-mt="ceo">CEO</button><button class="mt" data-mt="setter">Setter</button>
+          <button class="mt" data-mt="closer">Closer</button><button class="mt" data-mt="tables">Tables</button>
+        </div>
+        <div id="mapList"></div>
+      </div>
+      <div class="field">
+        <label>Monthly Cash Goal (optional)</label>
+        <input type="number" id="goalInput" placeholder="e.g. 100000" style="width:100%">
+      </div>
+      <div class="note"><b>Live:</b> the dashboard re-reads every connected tab on load, every 5 min, and when you return to the tab — fresh each time (the backend doesn't cache). As your sheets fill in, the numbers follow.</div>
+    </div>
+    <div class="modal-foot"><button class="btn" id="cancelModal">Cancel</button><button class="btn gold" id="saveModal">Save &amp; Sync</button></div>
+  </div>
+</div>
+
+<script>
+const _mem={};
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return _mem[k]??null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){_mem[k]=v}}};
+let CFG={demo:true,goal:"",token:"",sources:[],map:{},closesSrc:{},plansSrc:{}};
+try{const s=store.get("kpi_cfg2");if(s)CFG=Object.assign(CFG,JSON.parse(s))}catch(e){}
+CFG.sources=CFG.sources||[];CFG.map=CFG.map||{};CFG.closesSrc=CFG.closesSrc||{};CFG.plansSrc=CFG.plansSrc||{};
+
+const API_BASE="/api/sheets"; // same Vercel project serves both index.html and this function
+const toNum=v=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));return isNaN(n)?0:n};
+const toDate=v=>{
+  if(v==null||v==="")return null;
+  if(v instanceof Date)return isNaN(v)?null:v;
+  const s=String(v).trim();
+  // DD/MM/YYYY or DD-MM-YYYY (day-first, as in the sheet). Also accepts 2-digit year.
+  let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){let[,d,mo,y]=m;d=+d;mo=+mo;y=+y;if(y<100)y+=2000;
+    if(mo>=1&&mo<=12&&d>=1&&d<=31){const dt=new Date(y,mo-1,d);return isNaN(dt)?null:dt}}
+  // ISO YYYY-MM-DD (and anything else the engine can parse natively).
+  const dt=new Date(s);return isNaN(dt)?null:dt;
+};
+const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const extractId=s=>{s=String(s||"").trim();const m=s.match(/\/d\/([A-Za-z0-9_-]+)/);return m?m[1]:s};
+function apiUrl(id,tab){let u=API_BASE+"?id="+encodeURIComponent(id);if(tab!=null)u+="&tab="+encodeURIComponent(tab);if(CFG.token)u+="&token="+encodeURIComponent(CFG.token);return u}
+async function apiGet(id,tab){const r=await fetch(apiUrl(id,tab));if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
+
+const M_CEO=[["qualifiedBookedCalls","Qualified Booked Calls"],["qualifiedCallsTaken","Qualified Calls Taken"],["callsClosed","Calls Closed"],["totalCash","Total Cash"],["newCash","New Cash"],["upsellCash","Up-sell Cash"],["commission","Commission"],["icpLeads","ICP Leads"]];
+const M_SETTER=[["qualifiedBookedCalls","Qualified Booked Calls"],["unqualifiedBookedCalls","Un-Qualified Booked Calls"],["qualifiedCallsTaken","Qualified Calls Taken (= Calls Showed)"],["callsClosed","Calls Closed"],["callsShowed","Calls Showed"],["callsOnCalendar","Calls on the Calendar"],["newConversations","New Conversations"],["callsProposed","Calls Proposed"],["followUps","Follow Ups Sent"],["outbounds","Outbounds"],["outboundResponses","Outbound Responses"],["icpLeads","ICP Leads Attracted"],["cashInDMs","Cash Collected in DMs"],["commission","Commission"]];
+const M_CLOSER=[["qualifiedCallsTaken","Qualified Calls Taken"],["disqualifiedCalls","Disqualified Calls"],["callsClosed","Calls Closed"],["offersPitched","Offers Pitched"],["closerCash","Closer Cash Collected"],["revenue","Revenue"]];
+const TABMETRICS={ceo:M_CEO,setter:M_SETTER,closer:M_CLOSER};
+
+let RAW={ceo:[],setter:[],closer:[],closes:[],plans:[]};
+let SRC={};
+const charts={};
+const BAR=["#f0d79b","#bd861f"];
+let STATUS={type:"demo",text:"Demo data",sync:"Not synced yet"};
+
+function genDemo(){
+  const now=new Date(),y=now.getFullYear(),m=now.getMonth(),days=now.getDate();
+  const daily=[],closes=[],plans=[];
+  const names=["Marcus L.","Priya N.","Tom B.","Elena R.","Sasha K.","Devon W.","Mara C.","Idris F.","Joon P.","Hana M.","Carlos V.","Wren A."];
+  for(const off of [-1,0]){
+    const base=new Date(y,m+off,1),by=base.getFullYear(),bm=base.getMonth();
+    const last=(off===0)?days:new Date(by,bm+1,0).getDate();
+    for(let d=1;d<=last;d++){
+      const date=new Date(by,bm,d);
+      const qb=2+Math.floor(Math.random()*5),uq=Math.floor(Math.random()*3);
+      const taken=Math.max(0,qb-Math.floor(Math.random()*2)),closed=Math.floor(taken*(0.3+Math.random()*0.3));
+      const offers=Math.min(taken,closed+Math.floor(Math.random()*3));
+      const closerCash=closed*(2500+Math.floor(Math.random()*4000));
+      const upsell=Math.floor(Math.random()*3000),ceoExtra=Math.floor(Math.random()*2000),ppCash=Math.floor(Math.random()*3500);
+      daily.push({date,qualifiedBookedCalls:qb,unqualifiedBookedCalls:uq,qualifiedCallsTaken:taken,disqualifiedCalls:Math.floor(Math.random()*3),
+        callsClosed:closed,offersPitched:offers,closerCash,revenue:Math.round(closerCash*(1+Math.random()*0.35)),
+        totalCash:closerCash+ppCash+upsell+ceoExtra,newCash:closerCash,upsellCash:upsell,commission:Math.round(closerCash*0.12),
+        icpLeads:5+Math.floor(Math.random()*12),newConversations:8+Math.floor(Math.random()*20),callsProposed:1+Math.floor(Math.random()*5),
+        followUps:5+Math.floor(Math.random()*15),outbounds:30+Math.floor(Math.random()*50),outboundResponses:5+Math.floor(Math.random()*18),
+        callsOnCalendar:qb+uq,callsShowed:taken,cashInDMs:Math.round(closerCash*0.2)});
+      for(let c=0;c<closed;c++)closes.push({date,name:names[Math.floor(Math.random()*names.length)],cashCollected:2500+Math.floor(Math.random()*4000)});
+    }
+  }
+  for(let i=0;i<10;i++)plans.push({name:names[i%names.length],dueDate:new Date(y,m,2+i*2),status:Math.random()>0.4?"Paid":"Not Paid",amountDue:1000+Math.floor(Math.random()*3500)});
+  closes.sort((a,b)=>b.date-a.date);
+  return{daily,closes,plans};
+}
+
+function assembleTab(tab,defs){
+  const dayMap={};
+  defs.forEach(([id])=>{const m=CFG.map[tab+"."+id];if(!m||!m.src||!m.col||!m.dateCol)return;
+    const src=SRC[m.src];if(!src)return;
+    src.rows.forEach(row=>{const d=toDate(row[m.dateCol]);if(!d)return;
+      const k=iso(d);if(!dayMap[k])dayMap[k]={date:new Date(d.getFullYear(),d.getMonth(),d.getDate())};
+      dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[m.col])})});
+  return Object.values(dayMap).sort((a,b)=>a.date-b.date);
+}
+function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
+  return src.rows.map(r=>({date:toDate(r[c.dateCol]),name:String(r[c.nameCol]||"").trim(),cashCollected:toNum(r[c.cashCol])})).filter(x=>x.date).sort((a,b)=>b.date-a.date)}
+function assemblePlans(){const c=CFG.plansSrc||{},src=SRC[c.src];if(!src)return [];
+  return src.rows.map(r=>({name:String(r[c.nameCol]||"").trim(),dueDate:toDate(r[c.dueCol]),status:String(r[c.statusCol]||"").trim(),amountDue:toNum(r[c.amountCol])}))}
+const hasSources=()=>CFG.sources.some(s=>s.sheetId&&s.tab);
+async function loadData(){
+  if(CFG.demo||!hasSources()){const d=genDemo();RAW.ceo=d.daily;RAW.setter=d.daily;RAW.closer=d.daily;RAW.closes=d.closes;RAW.plans=d.plans;setConn("demo");return}
+  try{
+    await Promise.all(CFG.sources.map(async s=>{
+      if(!s.sheetId||!s.tab){SRC[s.id]={rows:[],headers:s.headers||[]};return}
+      try{const d=await apiGet(s.sheetId,s.tab);SRC[s.id]={rows:d.rows||[],headers:(d.headers&&d.headers.length)?d.headers:(d.rows&&d.rows[0]?Object.keys(d.rows[0]):(s.headers||[]))}}
+      catch(e){SRC[s.id]={rows:[],headers:s.headers||[]}}
+    }));
+    RAW.ceo=assembleTab("ceo",M_CEO);RAW.setter=assembleTab("setter",M_SETTER);RAW.closer=assembleTab("closer",M_CLOSER);
+    RAW.closes=assembleCloses();RAW.plans=assemblePlans();setConn("live");
+  }catch(e){console.error(e);setConn("err")}
+}
+
+function getRange(){let fs=document.getElementById("fromDate").value,ts=document.getElementById("toDate").value;
+  if(fs&&ts&&fs>ts){const t=fs;fs=ts;ts=t}
+  return{from:fs?new Date(fs+"T00:00:00"):new Date(0),to:ts?new Date(ts+"T23:59:59.999"):new Date()}}
+function applyPreset(val){
+  const now=new Date();now.setHours(0,0,0,0);let from,to;
+  if(val==="this_month"){from=new Date(now.getFullYear(),now.getMonth(),1);to=now}
+  else if(val==="last_month"){from=new Date(now.getFullYear(),now.getMonth()-1,1);to=new Date(now.getFullYear(),now.getMonth(),0)}
+  else if(val==="last_7"){from=new Date(now);from.setDate(now.getDate()-6);to=now}
+  else if(val==="last_30"){from=new Date(now);from.setDate(now.getDate()-29);to=now}
+  else if(val==="this_year"){from=new Date(now.getFullYear(),0,1);to=now}
+  else if(val==="all_time"){const ds=[].concat(RAW.ceo,RAW.setter,RAW.closer).map(r=>r.date).filter(Boolean).sort((a,b)=>a-b);
+    from=ds.length?new Date(ds[0]):new Date(now.getFullYear(),0,1);to=ds.length?new Date(ds[ds.length-1]):now}
+  else return;
+  document.getElementById("fromDate").value=iso(from);document.getElementById("toDate").value=iso(to);
+}
+function rangeDays(from,to){const a=[];const d=new Date(from);d.setHours(0,0,0,0);const e=new Date(to);e.setHours(0,0,0,0);let g=0;while(d<=e&&g<4000){a.push(new Date(d));d.setDate(d.getDate()+1);g++}return a}
+const inR=(d,f,t)=>d&&d>=f&&d<=t;
+const sum=(rows,k)=>rows.reduce((a,r)=>a+(r[k]||0),0);
+const fmtMoney=v=>"$"+Math.round(v).toLocaleString();
+const fmtPct=v=>(isFinite(v)?(v*100).toFixed(1):"0.0")+"%";
+const safeDiv=(a,b)=>b?a/b:0;
+const isPaid=s=>/paid/i.test(s)&&!/not\s*paid|unpaid/i.test(s);
+function pacing(endDate,key,allRows){const y=endDate.getFullYear(),m=endDate.getMonth();
+  const mr=(allRows||[]).filter(r=>r.date&&r.date.getFullYear()===y&&r.date.getMonth()===m&&r.date<=endDate);
+  const total=sum(mr,key),dim=new Date(y,m+1,0).getDate(),dayOf=Math.min(endDate.getDate(),dim);return safeDiv(total,dayOf)*dim}
+function fmtRange(from,to){if(!from||!to)return"—";
+  const sy=from.getFullYear()===to.getFullYear(),sm=sy&&from.getMonth()===to.getMonth();
+  if(sm)return from.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" – "+to.getDate()+", "+to.getFullYear();
+  if(sy)return from.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" – "+to.toLocaleDateString("en-US",{month:"short",day:"numeric"})+", "+to.getFullYear();
+  return from.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+" – "+to.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+function fmtDate(d){return d?d.toLocaleDateString("en-US",{month:"short",day:"numeric"}):"—"}
+function subHtml(from,to){return `${fmtRange(from,to)} <span class="dia">◆</span> <span class="st ${STATUS.type}">${STATUS.text}</span> <span class="dia">◆</span> ${STATUS.sync}`}
+function card(lbl,val,o={}){const cls=o.gold?"card gold":"card";const sub=o.sub?`<div class="sub">${o.sub}</div>`:"";return `<div class="${cls}"><div class="lbl">${lbl}</div><div class="val">${val}</div>${sub}</div>`}
+
+function barCharts(cid,defs,rows,from,to){
+  const cont=document.getElementById(cid);
+  cont.innerHTML=defs.map((d,i)=>`<div class="chart-card"><h4>${d[0]} — daily</h4><div class="chart-box"><canvas id="${cid}_${i}"></canvas></div></div>`).join("");
+  const days=rangeDays(from,to),single=from.getFullYear()===to.getFullYear()&&from.getMonth()===to.getMonth();
+  const labels=days.map(dd=>single?dd.getDate():(dd.getMonth()+1)+"/"+dd.getDate());
+  const agg=days.map(day=>{const rs=rows.filter(r=>r.date.getFullYear()===day.getFullYear()&&r.date.getMonth()===day.getMonth()&&r.date.getDate()===day.getDate());
+    const o={};defs.forEach(def=>o[def[1]]=rs.reduce((a,r)=>a+(r[def[1]]||0),0));return o});
+  defs.forEach((d,i)=>{const id=cid+"_"+i,data=agg.map(o=>o[d[1]]);if(charts[id])charts[id].destroy();
+    charts[id]=new Chart(document.getElementById(id),{type:"bar",
+      data:{labels,datasets:[{data,borderRadius:4,barPercentage:.92,categoryPercentage:.84,
+        backgroundColor:c=>{const{ctx,chartArea}=c.chart;if(!chartArea)return BAR[0];const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);g.addColorStop(0,BAR[0]);g.addColorStop(1,BAR[1]);return g}}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#14110c",borderColor:"#352a1e",borderWidth:1,padding:10,titleColor:"#f1ede5",bodyColor:"#d8a94f"}},
+        scales:{x:{title:{display:true,text:single?"Day of Month":"Date",color:"#8a8174",font:{size:10,weight:"600",family:"Poppins"}},grid:{display:false},ticks:{color:"#857d70",font:{size:9.5,family:"Poppins"},maxRotation:0,autoSkip:!single,maxTicksLimit:single?31:15}},
+          y:{title:{display:true,text:"Count",color:"#8a8174",font:{size:10,weight:"600",family:"Poppins"}},grid:{color:"rgba(255,255,255,.05)"},ticks:{color:"#857d70",font:{size:10,family:"Poppins"},precision:0},beginAtZero:true}}}})});
+}
+
+function renderCeo(){const {from,to}=getRange();const rows=RAW.ceo.filter(r=>inR(r.date,from,to));
+  document.getElementById("ceoSub").innerHTML=subHtml(from,to);
+  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),closed=sum(rows,"callsClosed"),cash=sum(rows,"totalCash");
+  const pace=pacing(to,"totalCash",RAW.ceo),goal=toNum(CFG.goal);
+  const ppPaid=RAW.plans.filter(r=>inR(r.dueDate,from,to)&&isPaid(r.status)).reduce((a,r)=>a+(r.amountDue||0),0);
+  document.getElementById("ceoCards").innerHTML=[
+    card("Qualified Booked Calls",booked.toLocaleString()),card("Qualified Calls Taken",taken.toLocaleString()),
+    card("Calls Closed",closed.toLocaleString()),card("Close Rate",fmtPct(safeDiv(closed,taken)),{sub:"closed ÷ taken"}),
+    card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),card("Total Cash",fmtMoney(cash),{gold:true}),
+    card("Monthly Pacing",fmtMoney(pace),{gold:true,sub:goal?fmtPct(safeDiv(pace,goal))+" of goal":"projected to month-end"}),
+    card("New Cash",fmtMoney(sum(rows,"newCash"))),card("Payment Plans Paid",fmtMoney(ppPaid),{sub:"paid plans in range"}),
+    card("Up-sell Cash",fmtMoney(sum(rows,"upsellCash"))),card("Commission",fmtMoney(sum(rows,"commission"))),
+    card("Average Order Value",fmtMoney(safeDiv(cash,closed)),{sub:"cash ÷ closed"}),card("ICP Leads",sum(rows,"icpLeads").toLocaleString())].join("");
+  const cl=RAW.closes.filter(r=>inR(r.date,from,to)),cb=document.getElementById("closesBody");
+  if(cl.length){cb.innerHTML=cl.slice(0,200).map(r=>`<tr><td>${fmtDate(r.date)}</td><td class="kpi">${esc(r.name||"—")}</td><td class="num">${fmtMoney(r.cashCollected)}</td></tr>`).join("");document.getElementById("closesCount").textContent=cl.length+" in range"}else cb.innerHTML=`<tr><td colspan="3" class="empty">No closes in this range</td></tr>`;
+  const pl=RAW.plans.filter(r=>inR(r.dueDate,from,to)),pb=document.getElementById("plansBody");
+  if(pl.length){pl.sort((a,b)=>a.dueDate-b.dueDate);pb.innerHTML=pl.map(r=>{const paid=isPaid(r.status);return `<tr><td class="kpi">${esc(r.name||"—")}</td><td>${fmtDate(r.dueDate)}</td><td><span class="status ${paid?'paid':'unpaid'}">${paid?'Paid':'Not Paid'}</span></td><td class="num">${fmtMoney(r.amountDue)}</td></tr>`}).join("");document.getElementById("plansCount").textContent=pl.length+" in range"}else pb.innerHTML=`<tr><td colspan="4" class="empty">No payment plans in this range</td></tr>`;
+}
+function renderSetter(){const {from,to}=getRange();const rows=RAW.setter.filter(r=>inR(r.date,from,to));
+  document.getElementById("setterSub").innerHTML=subHtml(from,to);
+  const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),closed=sum(rows,"callsClosed");
+  const ob=sum(rows,"outbounds"),obr=sum(rows,"outboundResponses"),dmCash=sum(rows,"cashInDMs"),proposed=sum(rows,"callsProposed"),icp=sum(rows,"icpLeads");
+  const pace=pacing(to,"cashInDMs",RAW.setter),goal=toNum(CFG.goal);
+  document.getElementById("setterCards").innerHTML=[
+    card("Qualified Booked Calls",booked.toLocaleString()),card("Qualified Calls Taken",taken.toLocaleString()),card("Calls Closed",closed.toLocaleString()),
+    card("Close Rate",fmtPct(safeDiv(closed,taken)),{sub:"closed ÷ taken"}),card("Show Rate",fmtPct(safeDiv(taken,booked)),{sub:"taken ÷ booked"}),
+    card("Cash Collected in DMs",fmtMoney(dmCash),{gold:true}),card("Monthly Pacing",fmtMoney(pace),{gold:true,sub:goal?fmtPct(safeDiv(pace,goal))+" of goal":"DM cash → month-end"}),
+    card("Commission",fmtMoney(sum(rows,"commission"))),card("ICP Leads",icp.toLocaleString()),card("New Conversations",sum(rows,"newConversations").toLocaleString()),
+    card("Calls Proposed",proposed.toLocaleString()),card("Pitch Rate",fmtPct(safeDiv(proposed,icp)),{sub:"proposed ÷ ICP leads"}),
+    card("Follow Ups",sum(rows,"followUps").toLocaleString()),card("Outbound Reply Rate",fmtPct(safeDiv(obr,ob)),{sub:"responses ÷ outbounds"})].join("");
+  barCharts("setterCharts",[["Qualified Booked Calls","qualifiedBookedCalls"],["Un-Qualified Booked Calls","unqualifiedBookedCalls"],["Calls on the Calendar","callsOnCalendar"],["Number of Outbounds","outbounds"],["Calls Showed","callsShowed"],["Follow Ups Sent","followUps"],["ICP Leads Attracted","icpLeads"]],rows,from,to);
+}
+function renderCloser(){const {from,to}=getRange();const rows=RAW.closer.filter(r=>inR(r.date,from,to));
+  document.getElementById("closerSub").innerHTML=subHtml(from,to);
+  const taken=sum(rows,"qualifiedCallsTaken"),disq=sum(rows,"disqualifiedCalls"),closed=sum(rows,"callsClosed"),offers=sum(rows,"offersPitched"),cash=sum(rows,"closerCash"),rev=sum(rows,"revenue");
+  document.getElementById("closerCards").innerHTML=[
+    card("Qualified Calls Taken",taken.toLocaleString()),card("Disqualified Calls",disq.toLocaleString()),card("Calls Closed",closed.toLocaleString()),
+    card("Offers Pitched",offers.toLocaleString()),card("Pitch Rate",fmtPct(safeDiv(offers,taken)),{sub:"offers ÷ qualified"}),
+    card("Cash Collected",fmtMoney(cash),{gold:true}),card("Revenue",fmtMoney(rev),{gold:true})].join("");
+  barCharts("closerCharts",[["Qualified Calls Taken","qualifiedCallsTaken"],["Calls Closed","callsClosed"]],rows,from,to);
+}
+function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheets"}else if(t==="err"){STATUS.type="err";STATUS.text="Fetch failed"}else{STATUS.type="demo";STATUS.text="Demo data"}}
+function fullRender(){renderCeo();renderSetter();renderCloser()}
+async function doSync(){const btn=document.getElementById("syncBtn");btn.classList.add("spin");await loadData();
+  STATUS.sync="synced "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});fullRender();btn.classList.remove("spin")}
+
+/* ---------- Settings ---------- */
+let curTab="ceo";
+const headersOf=id=>{const s=CFG.sources.find(x=>x.id===id);return s?(s.headers||[]):[]};
+const isDateCol=h=>/date|day/i.test(h);
+const firstDateCol=id=>headersOf(id).find(isDateCol)||"";
+function srcOpts(sel){return '<option value="">— source —</option>'+CFG.sources.filter(s=>s.name||s.sheetId).map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name||'(unnamed)')}</option>`).join("")}
+function colOpts(sid,sel,dateOnly){let hs=headersOf(sid);if(dateOnly){const ds=hs.filter(isDateCol);if(ds.length)hs=ds}
+  return '<option value="">—</option>'+hs.map(h=>`<option ${h===sel?'selected':''}>${esc(h)}</option>`).join("")}
+
+function renderSources(){
+  const el=document.getElementById("srcList");
+  el.innerHTML=CFG.sources.map((s,i)=>`<div class="srcrow" data-i="${i}">
+    <input type="text" class="s-name" placeholder="Name (e.g. Setter EOD)" value="${esc(s.name||'')}">
+    <input type="text" class="s-id" placeholder="Sheet link or ID" value="${esc(s.sheetUrl||s.sheetId||'')}">
+    <input type="text" class="s-tab" placeholder="Tab name" value="${esc(s.tab||'')}">
+    <button class="btn s-conn">${s.headers&&s.headers.length?('✓ '+s.headers.length+' cols'):'Connect'}</button>
+    <button class="btn s-del">✕</button></div>`).join("")||'<div class="hint">No sources yet — add one below.</div>';
+  el.querySelectorAll(".srcrow").forEach(row=>{const i=+row.dataset.i;
+    row.querySelector(".s-name").oninput=e=>CFG.sources[i].name=e.target.value;
+    row.querySelector(".s-id").oninput=e=>CFG.sources[i].sheetUrl=e.target.value;
+    row.querySelector(".s-tab").oninput=e=>CFG.sources[i].tab=e.target.value;
+    row.querySelector(".s-conn").onclick=async()=>{const b=row.querySelector(".s-conn");b.textContent="…";
+      const s=CFG.sources[i];s.sheetId=extractId(s.sheetUrl);
+      try{const d=await apiGet(s.sheetId,s.tab);s.headers=(d.headers&&d.headers.length)?d.headers:(d.rows&&d.rows[0]?Object.keys(d.rows[0]):[])}
+      catch(e){s.headers=[];b.textContent="Retry"}
+      renderSources();renderMap(curTab)};
+    row.querySelector(".s-del").onclick=()=>{CFG.sources.splice(i,1);renderSources();renderMap(curTab)};
+  });
+}
+function metricRow(tab,id,lbl){const m=CFG.map[tab+"."+id]||{};const dsel=m.dateCol||firstDateCol(m.src);
+  return `<div class="maprow" data-id="${id}"><div class="ml">${lbl}</div><div class="mr">
+    <select class="m-src">${srcOpts(m.src)}</select><select class="m-col">${colOpts(m.src,m.col,false)}</select>
+    <select class="m-date" title="date column">${colOpts(m.src,dsel,true)}</select></div></div>`}
+function renderMap(tab){curTab=tab;
+  if(tab==="tables"){renderTables();return}
+  document.getElementById("mapList").innerHTML=TABMETRICS[tab].map(([id,lbl])=>metricRow(tab,id,lbl)).join("");
+  document.querySelectorAll("#mapList .maprow").forEach(row=>{
+    const ss=row.querySelector(".m-src"),cs=row.querySelector(".m-col"),ds=row.querySelector(".m-date");
+    ss.onchange=()=>{cs.innerHTML=colOpts(ss.value,"",false);ds.innerHTML=colOpts(ss.value,firstDateCol(ss.value),true)}});
+}
+function tblPick(label,cls,sid,sel,dateOnly){return `<div class="maprow"><div class="ml">${label}</div><div class="mr"><select class="${cls}" style="flex:1">${colOpts(sid,sel,dateOnly)}</select></div></div>`}
+function renderTables(){
+  const c=CFG.closesSrc||{},p=CFG.plansSrc||{};
+  document.getElementById("mapList").innerHTML=`
+    <div class="ml" style="color:var(--gold-lite);margin:4px 0 6px;font-weight:600">Recent Closes table</div>
+    <div class="maprow" style="border:none;padding-top:0"><div class="mr"><select class="cl-src" style="flex:1">${srcOpts(c.src)}</select></div></div>
+    ${tblPick("Date column","cl-date",c.src,c.dateCol,true)}${tblPick("Name column","cl-name",c.src,c.nameCol,false)}${tblPick("Cash column","cl-cash",c.src,c.cashCol,false)}
+    <div class="ml" style="color:var(--gold-lite);margin:18px 0 6px;font-weight:600">Payment Plans table</div>
+    <div class="maprow" style="border:none;padding-top:0"><div class="mr"><select class="pl-src" style="flex:1">${srcOpts(p.src)}</select></div></div>
+    ${tblPick("Client / name column","pl-name",p.src,p.nameCol,false)}${tblPick("Due date column","pl-due",p.src,p.dueCol,true)}${tblPick("Status column","pl-status",p.src,p.statusCol,false)}${tblPick("Amount column","pl-amount",p.src,p.amountCol,false)}`;
+  const cs=document.querySelector(".cl-src"),ps=document.querySelector(".pl-src");
+  if(cs)cs.onchange=()=>{CFG.closesSrc.src=cs.value;renderTables()};
+  if(ps)ps.onchange=()=>{CFG.plansSrc.src=ps.value;renderTables()};
+}
+function captureTab(tab){
+  if(tab==="tables"){const g=q=>{const e=document.querySelector(q);return e?e.value:""};
+    CFG.closesSrc={src:g(".cl-src"),dateCol:g(".cl-date"),nameCol:g(".cl-name"),cashCol:g(".cl-cash")};
+    CFG.plansSrc={src:g(".pl-src"),nameCol:g(".pl-name"),dueCol:g(".pl-due"),statusCol:g(".pl-status"),amountCol:g(".pl-amount")};return}
+  document.querySelectorAll("#mapList .maprow").forEach(row=>{const id=row.dataset.id;if(!id)return;
+    const src=row.querySelector(".m-src").value,col=row.querySelector(".m-col").value,dc=row.querySelector(".m-date").value;
+    const key=tab+"."+id;if(src&&col&&dc)CFG.map[key]={src,col,dateCol:dc};else delete CFG.map[key]});
+}
+function initEvents(){
+  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.getElementById("page-"+t.dataset.page).classList.add("active");window.scrollTo({top:0,behavior:"smooth"})});
+  document.getElementById("preset").onchange=e=>{applyPreset(e.target.value);fullRender()};
+  document.getElementById("fromDate").onchange=()=>{document.getElementById("preset").value="custom";fullRender()};
+  document.getElementById("toDate").onchange=()=>{document.getElementById("preset").value="custom";fullRender()};
+  document.getElementById("syncBtn").onclick=doSync;
+  const ov=document.getElementById("overlay");
+  document.getElementById("settingsBtn").onclick=()=>{document.getElementById("demoToggle").checked=CFG.demo;document.getElementById("goalInput").value=CFG.goal;document.getElementById("tokenInput").value=CFG.token||"";
+    renderSources();document.querySelectorAll(".mt").forEach(b=>b.classList.toggle("active",b.dataset.mt==="ceo"));renderMap("ceo");ov.classList.add("show")};
+  document.getElementById("addSrc").onclick=()=>{CFG.sources.push({id:"s"+Date.now()+Math.floor(Math.random()*999),name:"",sheetUrl:"",sheetId:"",tab:"",headers:[]});renderSources()};
+  document.querySelectorAll(".mt").forEach(b=>b.onclick=()=>{captureTab(curTab);document.querySelectorAll(".mt").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderMap(b.dataset.mt)});
+  const close=()=>ov.classList.remove("show");
+  document.getElementById("closeModal").onclick=close;document.getElementById("cancelModal").onclick=close;ov.onclick=e=>{if(e.target===ov)close()};
+  document.getElementById("saveModal").onclick=async()=>{captureTab(curTab);CFG.demo=document.getElementById("demoToggle").checked;CFG.goal=document.getElementById("goalInput").value.trim();CFG.token=document.getElementById("tokenInput").value.trim();
+    store.set("kpi_cfg2",JSON.stringify(CFG));close();await doSync()};
+}
+function boot(){if(typeof Chart==="undefined"){setTimeout(boot,120);return}
+  document.getElementById("preset").value="this_month";applyPreset("this_month");initEvents();doSync();
+  setInterval(()=>{if(!CFG.demo)doSync()},300000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!CFG.demo)doSync()})}
+window.addEventListener("load",boot);
+</script>
+</body>
+</html>
