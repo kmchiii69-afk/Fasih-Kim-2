@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/eod-reminder",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/eod-reminder",
+      "schedule": "0 21 * * *"
+    }
+  ]
+}
