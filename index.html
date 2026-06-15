@@ -203,6 +203,30 @@
 <script>
 const _mem={};
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return _mem[k]??null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){_mem[k]=v}}};
+const CONFIG_API="/api/config"; // shared config endpoint (Google Sheet backed)
+// Pull the shared team config from the server. Falls back to local cache on failure.
+async function loadSharedCfg(){
+  try{
+    const r=await fetch(CONFIG_API,{cache:"no-store"});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    if(d&&d.config&&typeof d.config==="object"){
+      CFG=Object.assign({demo:true,goal:"",token:"",sources:[],map:{},closesSrc:{},plansSrc:{}},d.config);
+      CFG.sources=CFG.sources||[];CFG.map=CFG.map||{};CFG.closesSrc=CFG.closesSrc||{};CFG.plansSrc=CFG.plansSrc||{};
+      store.set("kpi_cfg2",JSON.stringify(CFG)); // refresh local cache
+      return true;
+    }
+  }catch(e){/* offline or not configured — keep whatever local cache we loaded */}
+  return false;
+}
+// Save config to the server so every browser shares it (last-save-wins).
+async function saveSharedCfg(){
+  store.set("kpi_cfg2",JSON.stringify(CFG)); // local cache first (instant)
+  try{
+    await fetch(CONFIG_API,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({config:CFG,token:CFG.token||""})});
+  }catch(e){/* if server save fails, local cache still holds it for this browser */}
+}
 let CFG={demo:true,goal:"",token:"",sources:[],map:{},closesSrc:{},plansSrc:{}};
 try{const s=store.get("kpi_cfg2");if(s)CFG=Object.assign(CFG,JSON.parse(s))}catch(e){}
 CFG.sources=CFG.sources||[];CFG.map=CFG.map||{};CFG.closesSrc=CFG.closesSrc||{};CFG.plansSrc=CFG.plansSrc||{};
@@ -483,9 +507,10 @@ function initEvents(){
   const close=()=>ov.classList.remove("show");
   document.getElementById("closeModal").onclick=close;document.getElementById("cancelModal").onclick=close;ov.onclick=e=>{if(e.target===ov)close()};
   document.getElementById("saveModal").onclick=async()=>{captureTab(curTab);CFG.demo=document.getElementById("demoToggle").checked;CFG.goal=document.getElementById("goalInput").value.trim();CFG.token=document.getElementById("tokenInput").value.trim();
-    store.set("kpi_cfg2",JSON.stringify(CFG));close();await doSync()};
+    await saveSharedCfg();close();await doSync()};
 }
-function boot(){if(typeof Chart==="undefined"){setTimeout(boot,120);return}
+async function boot(){if(typeof Chart==="undefined"){setTimeout(boot,120);return}
+  await loadSharedCfg(); // pull team config before first render
   document.getElementById("preset").value="this_month";applyPreset("this_month");initEvents();doSync();
   setInterval(()=>{if(!CFG.demo)doSync()},300000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!CFG.demo)doSync()})}
 window.addEventListener("load",boot);
