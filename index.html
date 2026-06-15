@@ -181,21 +181,24 @@ body.editing .edit-only{display:inline-flex}
 
 <div class="wrap">
   <div class="page active" id="page-ceo">
-    <div class="hero"><h1>CEO <span class="gold">Dashboard</span></h1><div class="subline" id="ceoSub"></div><div class="divider"></div></div>
-    <div class="phead"><div class="sec" style="margin:48px 4px 20px;flex:1"><h2>Performance</h2><div class="rule"></div></div>
-      <div class="phead-actions" style="margin-top:48px"><button class="btn" data-addwidget="ceo">+ Add Widget</button><button class="btn edit-only" data-reset="ceo">Reset Layout</button></div></div>
+    <div class="hero"><h1>CEO <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
+    <div class="phead" style="margin:32px 0 18px">
+      <div style="flex:1"></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="ceo">+ Add Widget</button><button class="btn edit-only" data-reset="ceo">Reset Layout</button></div></div>
     <div class="customHost" data-tab="ceo"></div>
   </div>
   <div class="page" id="page-setter">
-    <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="subline" id="setterSub"></div><div class="divider"></div></div>
-    <div class="phead"><div class="sec" style="margin:48px 4px 20px;flex:1"><h2>Performance</h2><div class="rule"></div></div>
-      <div class="phead-actions" style="margin-top:48px"><button class="btn" data-addwidget="setter">+ Add Widget</button><button class="btn edit-only" data-reset="setter">Reset Layout</button></div></div>
+    <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
+    <div class="phead" style="margin:32px 0 18px">
+      <div style="flex:1"></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="setter">+ Add Widget</button><button class="btn edit-only" data-reset="setter">Reset Layout</button></div></div>
     <div class="customHost" data-tab="setter"></div>
   </div>
   <div class="page" id="page-closer">
-    <div class="hero"><h1>Closer <span class="gold">Dashboard</span></h1><div class="subline" id="closerSub"></div><div class="divider"></div></div>
-    <div class="phead"><div class="sec" style="margin:48px 4px 20px;flex:1"><h2>Performance</h2><div class="rule"></div></div>
-      <div class="phead-actions" style="margin-top:48px"><button class="btn" data-addwidget="closer">+ Add Widget</button><button class="btn edit-only" data-reset="closer">Reset Layout</button></div></div>
+    <div class="hero"><h1>Closer <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
+    <div class="phead" style="margin:32px 0 18px">
+      <div style="flex:1"></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="closer">+ Add Widget</button><button class="btn edit-only" data-reset="closer">Reset Layout</button></div></div>
     <div class="customHost" data-tab="closer"></div>
   </div>
 </div>
@@ -740,8 +743,9 @@ function syncCustomTabsUI(){
     const addB=document.getElementById("addTabBtn");
     if(addB)tabsBar.insertBefore(btn,addB);else tabsBar.appendChild(btn);
     const page=document.createElement("div");page.className="page";page.id="page-"+t.id;page.dataset.custom="1";
-    page.innerHTML=`<div class="phead"><div><h1>${esc(t.name)}</h1><div class="sub"></div></div>
-      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn" data-renametab="${t.id}">Rename</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
+    page.innerHTML=`<div class="hero"><h1>${esc(t.name)} <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
+      <div class="phead" style="margin:32px 0 18px"><div style="flex:1"></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn edit-only" data-reset="${t.id}">Reset Layout</button><button class="btn" data-renametab="${t.id}">Rename</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
       <div class="customHost"></div>`;
     main.appendChild(page);
   });
