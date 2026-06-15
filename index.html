@@ -112,6 +112,36 @@
   .modal-foot{padding:16px 24px;border-top:1px solid var(--line-str);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#14110c}
   .close-x{cursor:pointer;color:var(--muted);font-size:24px;line-height:1}.close-x:hover{color:var(--txt)}
   .note{font-size:11.5px;color:var(--muted);background:rgba(255,255,255,.025);border:1px solid var(--line-str);border-radius:9px;padding:13px;line-height:1.65}
+.tab.addtab{opacity:.7;font-weight:600}.tab.addtab:hover{opacity:1;color:var(--gold)}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.phead-actions{display:flex;gap:8px;flex-wrap:wrap}
+.customHost{margin-top:18px;display:flex;flex-direction:column;gap:18px}
+.widget{position:relative}
+.widget .wctrl{position:absolute;top:8px;right:8px;display:none;gap:3px;z-index:5}
+.widget:hover .wctrl{display:flex}
+.wbtn{width:22px;height:22px;border-radius:6px;border:1px solid var(--line-str);background:rgba(20,17,11,.92);color:var(--txt);cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
+.wbtn:hover{border-color:var(--gold);color:var(--gold)}.wbtn.del:hover{border-color:#c0492f;color:#e06a4f}
+.empty-tab{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--line-str);border-radius:14px}
+.btn.mini{padding:5px 11px;font-size:11px}
+.wsub{font-size:10.5px;color:var(--muted);margin-top:3px;font-weight:400}
+.custom-sec{display:flex;align-items:center;gap:12px}.custom-sec h2{margin:0}.custom-sec .rule{flex:1}
+.phead-actions .btn,.custom-sec .btn{white-space:nowrap}
+.wb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.wb-overlay.show{display:flex}
+.wb-modal{background:#14110b;border:1px solid var(--line-str);border-radius:16px;width:min(540px,96vw);max-height:90vh;display:flex;flex-direction:column}
+.wb-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.wb-head h3{margin:0;font-size:15px}.wb-x{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer}
+.wb-body{padding:16px 20px;overflow:auto}
+.wb-body label{display:block;font-size:11px;color:var(--muted);margin:12px 0 5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.wb-body label.wb-check{display:flex;align-items:center;gap:7px;text-transform:none;letter-spacing:0;cursor:pointer}
+.wb-body label.wb-check input{width:auto}
+.wb-body input,.wb-body select{width:100%;background:rgba(255,255,255,.03);border:1px solid var(--line-str);color:var(--txt);padding:9px 10px;border-radius:8px;font-size:12.5px;font-family:inherit;color-scheme:dark}
+.wb-body input:focus,.wb-body select:focus{outline:none;border-color:var(--gold)}
+.wb-hint{font-size:11.5px;color:var(--muted);padding:8px 0}
+.wb-colrow{display:flex;gap:6px;margin-bottom:6px;align-items:center}.wb-colrow input,.wb-colrow select{flex:1}
+.wb-rm{flex:0 0 auto;width:30px;background:#1a160f;border:1px solid var(--line-str);color:var(--muted);border-radius:7px;cursor:pointer}
+.wb-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--line)}
+#wb-addcol{margin-top:8px}
 </style>
 </head>
 <body>
@@ -122,6 +152,7 @@
       <div class="tab active" data-page="ceo"><span class="dia">◆</span> CEO</div>
       <div class="tab" data-page="setter"><span class="dia">◆</span> Setter</div>
       <div class="tab" data-page="closer"><span class="dia">◆</span> Closer</div>
+      <div class="tab addtab" id="addTabBtn" title="Add a custom tab">+ Tab</div>
     </div>
     <div class="nav-ctrl">
       <select class="sel" id="preset">
@@ -148,6 +179,8 @@
       <div class="tbl-card"><div class="tbl-bar"><span class="t">Payment Plans</span><span class="c" id="plansCount"></span></div>
         <div class="tbl-scroll"><table><thead><tr><th>Name</th><th>Due Date</th><th>Status</th><th class="num">Amount Due</th></tr></thead><tbody id="plansBody"></tbody></table></div></div>
     </div>
+    <div class="sec custom-sec"><h2>Custom Widgets</h2><button class="btn" data-addwidget="ceo">+ Add Widget</button><div class="rule"></div></div>
+    <div class="customHost" data-tab="ceo"></div>
   </div>
   <div class="page" id="page-setter">
     <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="subline" id="setterSub"></div><div class="divider"></div></div>
@@ -155,6 +188,8 @@
     <div class="cards" id="setterCards"></div>
     <div class="sec"><h2>Daily Breakdown</h2><div class="rule"></div></div>
     <div class="charts" id="setterCharts"></div>
+    <div class="sec custom-sec"><h2>Custom Widgets</h2><button class="btn" data-addwidget="setter">+ Add Widget</button><div class="rule"></div></div>
+    <div class="customHost" data-tab="setter"></div>
   </div>
   <div class="page" id="page-closer">
     <div class="hero"><h1>Closer <span class="gold">Dashboard</span></h1><div class="subline" id="closerSub"></div><div class="divider"></div></div>
@@ -162,6 +197,8 @@
     <div class="cards" id="closerCards"></div>
     <div class="sec"><h2>Daily Breakdown</h2><div class="rule"></div></div>
     <div class="charts" id="closerCharts"></div>
+    <div class="sec custom-sec"><h2>Custom Widgets</h2><button class="btn" data-addwidget="closer">+ Add Widget</button><div class="rule"></div></div>
+    <div class="customHost" data-tab="closer"></div>
   </div>
 </div>
 
@@ -298,6 +335,44 @@ function assembleTab(tab,defs){
       dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[m.col])})});
   return Object.values(dayMap).sort((a,b)=>a.date-b.date);
 }
+
+/* ===================== CUSTOM WIDGET ENGINE ===================== */
+// CFG.customTabs: [{id,name}]   CFG.widgets: [{id,tab,type,title,...spec}]
+// type "card": {agg:'sum|count|avg|ratio|math', src,col,dateCol, src2,col2 (ratio),
+//               expr (math, uses A=col,B=col2), fmt:'number|money|percent', gold}
+// type "bar":  {src,col,dateCol,title, fmt}
+// type "table":{src,dateCol, cols:[{header,col}]}
+function cAgg(spec,from,to){
+  const src=SRC[spec.src];if(!src)return null;
+  const inRange=r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false};
+  const rows=src.rows.filter(inRange);
+  const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
+  const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
+  if(spec.agg==="count")return cntCol(spec.col||spec.dateCol||Object.keys(src.rows[0]||{})[0]);
+  if(spec.agg==="avg"){const n=cntCol(spec.col);return n?sumCol(spec.col)/n:0}
+  if(spec.agg==="ratio"){const b=sumCol(spec.col2);return b?sumCol(spec.col)/b:0}
+  if(spec.agg==="math"){const A=sumCol(spec.col),B=spec.col2?sumCol(spec.col2):0;
+    try{return Function("A","B","return ("+(spec.expr||"A")+")")(A,B)}catch(e){return 0}}
+  return sumCol(spec.col); // default sum
+}
+function cFmt(v,fmt){if(v==null||isNaN(v))return "—";
+  if(fmt==="money")return fmtMoney(Math.round(v));
+  if(fmt==="percent")return fmtPct(v);
+  return Number(v).toLocaleString("en-US",{maximumFractionDigits:2})}
+// Daily series for a custom bar chart, respecting the date range.
+function cSeries(spec,from,to){
+  const src=SRC[spec.src];if(!src||!spec.dateCol)return [];
+  const map={};
+  src.rows.forEach(r=>{const d=toDate(r[spec.dateCol]);if(!d||!inR(d,from,to))return;
+    const k=iso(d);map[k]=(map[k]||0)+toNum(r[spec.col])});
+  return Object.entries(map).map(([k,v])=>({date:new Date(k),v})).sort((a,b)=>a.date-b.date);
+}
+function cTableRows(spec,from,to){
+  const src=SRC[spec.src];if(!src)return [];
+  return src.rows.filter(r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false})
+    .map(r=>(spec.cols||[]).map(c=>r[c.col]??""));
+}
+function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
 function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
   return src.rows.map(r=>({date:toDate(r[c.dateCol]),name:String(r[c.nameCol]||"").trim(),cashCollected:toNum(r[c.cashCol])})).filter(x=>x.date).sort((a,b)=>b.date-a.date)}
 function assemblePlans(){const c=CFG.plansSrc||{},src=SRC[c.src];if(!src)return [];
@@ -366,6 +441,61 @@ function barCharts(cid,defs,rows,from,to){
           y:{title:{display:true,text:"Count",color:"#8a8174",font:{size:10,weight:"600",family:"Poppins"}},grid:{color:"rgba(255,255,255,.05)"},ticks:{color:"#857d70",font:{size:10,family:"Poppins"},precision:0},beginAtZero:true}}}})});
 }
 
+/* ===================== CUSTOM WIDGET RENDERING ===================== */
+function renderCustomBar(canvasId,series,fmt){
+  const labels=series.map(p=>fmtDate(p.date)),data=series.map(p=>p.v);
+  if(charts[canvasId])charts[canvasId].destroy();
+  charts[canvasId]=new Chart(document.getElementById(canvasId),{type:"bar",
+    data:{labels,datasets:[{data,borderRadius:4,barPercentage:.92,categoryPercentage:.84,
+      backgroundColor:c=>{const{ctx,chartArea}=c.chart;if(!chartArea)return BAR[0];const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);g.addColorStop(0,BAR[0]);g.addColorStop(1,BAR[1]);return g}}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#14110c",borderColor:"#352a1e",borderWidth:1,padding:10,titleColor:"#f1ede5",bodyColor:"#d8a94f"}},
+      scales:{x:{grid:{display:false},ticks:{color:"#857d70",font:{size:9.5,family:"Poppins"},maxRotation:0,autoSkip:true,maxTicksLimit:15}},
+        y:{grid:{color:"rgba(255,255,255,.05)"},ticks:{color:"#857d70",font:{size:10,family:"Poppins"}},beginAtZero:true}}}});
+}
+function widgetCtrl(w){return `<div class="wctrl"><button class="wbtn" data-act="up" data-id="${w.id}">↑</button><button class="wbtn" data-act="down" data-id="${w.id}">↓</button><button class="wbtn" data-act="edit" data-id="${w.id}">✎</button><button class="wbtn del" data-act="del" data-id="${w.id}">✕</button></div>`}
+function renderWidgets(tab,from,to,editable){
+  const ws=widgetsFor(tab);
+  const cards=ws.filter(w=>w.type==="card"),rest=ws.filter(w=>w.type!=="card");
+  let html="";
+  if(cards.length){html+=`<div class="cards">`+cards.map(w=>{
+    const v=cAgg(w,from,to);const sub=w.sub?`<div class="sub">${esc(w.sub)}</div>`:"";
+    const ctrl=editable?widgetCtrl(w):"";
+    // A genuine .card element — identical to built-in cards — with controls overlaid.
+    return `<div class="${w.gold?'card gold':'card'} widget" data-id="${w.id}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}</div>`;
+  }).join("")+`</div>`}
+  rest.forEach(w=>{
+    const ctrl=editable?widgetCtrl(w):"";
+    if(w.type==="bar"){
+      const cid="cw_"+w.id;
+      html+=`<div class="chart-card widget" data-id="${w.id}">${ctrl}<h4>${esc(w.title)}</h4><div class="chart-box"><canvas id="${cid}"></canvas></div></div>`;
+    }else if(w.type==="table"){
+      const rows=cTableRows(w,from,to),cols=w.cols||[];
+      const head=cols.map(c=>`<th>${esc(c.header||c.col)}</th>`).join("");
+      const body=rows.length?rows.slice(0,300).map(r=>`<tr>${r.map(cell=>`<td>${esc(String(cell))}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${cols.length||1}" class="empty">No rows in this range</td></tr>`;
+      html+=`<div class="table-card widget" data-id="${w.id}">${ctrl}<div class="th-row"><h3>${esc(w.title)}</h3><span class="count">${rows.length} in range</span></div><div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+    }
+  });
+  return html;
+}
+function drawCustomBars(tab,from,to){
+  widgetsFor(tab).filter(w=>w.type==="bar").forEach(w=>{
+    const el=document.getElementById("cw_"+w.id);if(el)renderCustomBar("cw_"+w.id,cSeries(w,from,to),w.fmt)});
+}
+function renderCustomHost(tabId){
+  const {from,to}=getRange();
+  const host=document.querySelector('.customHost[data-tab="'+tabId+'"]');
+  if(!host)return;
+  host.innerHTML=renderWidgets(tabId,from,to,true)||`<div class="empty-tab">No custom widgets yet. Click <b>+ Add Widget</b> above to build one.</div>`;
+  drawCustomBars(tabId,from,to);
+}
+function renderCustomTab(tabId){
+  const {from,to}=getRange();const page=document.getElementById("page-"+tabId);if(!page)return;
+  const sub=page.querySelector(".sub");if(sub)sub.innerHTML=subHtml(from,to);
+  const host=page.querySelector(".customHost");if(!host)return;
+  host.innerHTML=renderWidgets(tabId,from,to,true)||`<div class="empty-tab">No widgets yet. Click <b>+ Add Widget</b> to build one.</div>`;
+  drawCustomBars(tabId,from,to);
+}
+
 function renderCeo(){const {from,to}=getRange();const rows=RAW.ceo.filter(r=>inR(r.date,from,to));
   document.getElementById("ceoSub").innerHTML=subHtml(from,to);
   const taken=sum(rows,"qualifiedCallsTaken"),booked=sum(rows,"qualifiedBookedCalls"),closed=sum(rows,"callsClosed"),cash=sum(rows,"totalCash");
@@ -412,7 +542,136 @@ function renderCloser(){const {from,to}=getRange();const rows=RAW.closer.filter(
   barCharts("closerCharts",[["Qualified Calls Taken","qualifiedCallsTaken"],["Calls Closed","callsClosed"]],rows,from,to);
 }
 function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheets"}else if(t==="err"){STATUS.type="err";STATUS.text="Fetch failed"}else{STATUS.type="demo";STATUS.text="Demo data"}}
-function fullRender(){renderCeo();renderSetter();renderCloser()}
+function rerenderTabWidgets(tabId){
+  if(["ceo","setter","closer"].includes(tabId))renderCustomHost(tabId);
+  else renderCustomTab(tabId);
+}
+function fullRender(){renderCeo();renderSetter();renderCloser();
+  ["ceo","setter","closer"].forEach(renderCustomHost);
+  (CFG.customTabs||[]).forEach(t=>renderCustomTab(t.id))}
+
+/* ===================== CUSTOM TAB MANAGEMENT ===================== */
+function syncCustomTabsUI(){
+  // Remove existing custom tab buttons & pages, then rebuild from CFG.
+  document.querySelectorAll('.tab[data-custom="1"]').forEach(e=>e.remove());
+  document.querySelectorAll('.page[data-custom="1"]').forEach(e=>e.remove());
+  const tabsBar=document.querySelector(".tabs");
+  const main=document.querySelector(".wrap")||document.body;
+  (CFG.customTabs||[]).forEach(t=>{
+    const btn=document.createElement("div");btn.className="tab";btn.dataset.page=t.id;btn.dataset.custom="1";
+    btn.innerHTML=`<span class="dia">◆</span> ${esc(t.name)}`;
+    const addB=document.getElementById("addTabBtn");
+    if(addB)tabsBar.insertBefore(btn,addB);else tabsBar.appendChild(btn);
+    const page=document.createElement("div");page.className="page";page.id="page-"+t.id;page.dataset.custom="1";
+    page.innerHTML=`<div class="phead"><div><h1>${esc(t.name)}</h1><div class="sub"></div></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn" data-renametab="${t.id}">Rename</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
+      <div class="customHost"></div>`;
+    main.appendChild(page);
+  });
+  wireTabClicks();
+}
+function wireTabClicks(){
+  document.querySelectorAll(".tab:not(.addtab)").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));const pg=document.getElementById("page-"+t.dataset.page);if(pg)pg.classList.add("active");window.scrollTo({top:0,behavior:"smooth"})});
+  const addBtn=document.getElementById("addTabBtn");if(addBtn)addBtn.onclick=addCustomTab;
+  document.querySelectorAll("[data-addwidget]").forEach(b=>b.onclick=()=>openWidgetBuilder(b.dataset.addwidget,null));
+  document.querySelectorAll("[data-renametab]").forEach(b=>b.onclick=()=>{const t=(CFG.customTabs||[]).find(x=>x.id===b.dataset.renametab);const n=prompt("Tab name:",t.name);if(n&&n.trim()){t.name=n.trim();saveSharedCfg();syncCustomTabsUI();fullRender()}});
+  document.querySelectorAll("[data-deltab]").forEach(b=>b.onclick=()=>{if(confirm("Delete this tab and its widgets?")){CFG.customTabs=(CFG.customTabs||[]).filter(x=>x.id!==b.dataset.deltab);CFG.widgets=(CFG.widgets||[]).filter(w=>w.tab!==b.dataset.deltab);saveSharedCfg();syncCustomTabsUI();fullRender();document.querySelector('.tab[data-page="ceo"]').click()}});
+}
+function addCustomTab(){const n=prompt("New tab name:");if(!n||!n.trim())return;
+  CFG.customTabs=CFG.customTabs||[];CFG.customTabs.push({id:"ct"+Date.now(),name:n.trim()});
+  saveSharedCfg();syncCustomTabsUI();fullRender()}
+// Widget add/edit/reorder/delete
+function saveWidget(w){CFG.widgets=CFG.widgets||[];const i=CFG.widgets.findIndex(x=>x.id===w.id);
+  if(i>=0)CFG.widgets[i]=w;else CFG.widgets.push(w);saveSharedCfg()}
+function delWidget(id){CFG.widgets=(CFG.widgets||[]).filter(w=>w.id!==id);saveSharedCfg()}
+function moveWidget(id,dir){const ws=CFG.widgets||[];const i=ws.findIndex(w=>w.id===id);if(i<0)return;
+  const tab=ws[i].tab;const sameTab=ws.map((w,idx)=>({w,idx})).filter(o=>o.w.tab===tab);
+  const pos=sameTab.findIndex(o=>o.w.id===id);const swap=sameTab[pos+dir];if(!swap)return;
+  const a=sameTab[pos].idx,b=swap.idx;[ws[a],ws[b]]=[ws[b],ws[a]];saveSharedCfg()}
+
+/* ===================== WIDGET BUILDER MODAL ===================== */
+function colSelect(cls,sid,sel){const hs=headersOf(sid);return `<select class="${cls}">`+'<option value="">—</option>'+hs.map(h=>`<option ${h===sel?'selected':''}>${esc(h)}</option>`).join("")+`</select>`}
+function openWidgetBuilder(tabId,existing){
+  const w=existing||{id:"w"+Date.now(),tab:tabId,type:"card",title:"",agg:"sum",fmt:"number"};
+  let ov=document.getElementById("wbOverlay");
+  if(!ov){ov=document.createElement("div");ov.id="wbOverlay";ov.className="wb-overlay";document.body.appendChild(ov)}
+  const srcOptions=sel=>'<option value="">— source —</option>'+CFG.sources.filter(s=>s.name||s.sheetId).map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name||'(unnamed)')}</option>`).join("");
+  ov.innerHTML=`<div class="wb-modal"><div class="wb-head"><h3>${existing?'Edit':'Add'} Widget</h3><button class="wb-x">✕</button></div>
+    <div class="wb-body">
+      <label>Type</label><select id="wb-type">
+        <option value="card" ${w.type==="card"?"selected":""}>Scorecard</option>
+        <option value="bar" ${w.type==="bar"?"selected":""}>Bar Chart</option>
+        <option value="table" ${w.type==="table"?"selected":""}>Table</option></select>
+      <label>Title</label><input id="wb-title" value="${esc(w.title||"")}" placeholder="e.g. Total Cash">
+      <div id="wb-dyn"></div>
+    </div>
+    <div class="wb-foot"><button class="btn" id="wb-cancel">Cancel</button><button class="btn gold" id="wb-save">Save Widget</button></div></div>`;
+  ov.classList.add("show");
+  const dyn=ov.querySelector("#wb-dyn");
+  function fields(){
+    const type=ov.querySelector("#wb-type").value;w.type=type;
+    if(type==="card"){
+      dyn.innerHTML=`<label>Calculation</label><select id="wb-agg">
+          <option value="sum" ${w.agg==="sum"?"selected":""}>Sum of column</option>
+          <option value="count" ${w.agg==="count"?"selected":""}>Count of rows</option>
+          <option value="avg" ${w.agg==="avg"?"selected":""}>Average of column</option>
+          <option value="ratio" ${w.agg==="ratio"?"selected":""}>Ratio (A ÷ B)</option>
+          <option value="math" ${w.agg==="math"?"selected":""}>Custom math (A,B)</option></select>
+        <label>Source</label>${srcSel()}
+        <div id="wb-cols"></div>
+        <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
+        <label>Format</label><select id="wb-fmt"><option value="number" ${w.fmt==="number"?"selected":""}>Number</option><option value="money" ${w.fmt==="money"?"selected":""}>Money ($)</option><option value="percent" ${w.fmt==="percent"?"selected":""}>Percent (%)</option></select>
+        <label class="wb-check"><input type="checkbox" id="wb-gold" ${w.gold?"checked":""}> Gold highlight</label>
+        <label>Subtitle (optional)</label><input id="wb-sub" value="${esc(w.sub||"")}" placeholder="e.g. closed ÷ taken">`;
+      bindCard();
+    }else if(type==="bar"){
+      dyn.innerHTML=`<label>Source</label>${srcSel()}
+        <label>Column to chart (summed per day)</label>${colSelect("wb-col",w.src,w.col)}
+        <label>Date column</label>${colSelect("wb-date",w.src,w.dateCol)}`;
+      bindSrcChange();
+    }else{
+      dyn.innerHTML=`<label>Source</label>${srcSel()}
+        <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
+        <label>Columns to show</label><div id="wb-tblcols"></div><button class="btn" id="wb-addcol">+ Add column</button>`;
+      bindTable();
+    }
+  }
+  function srcSel(){return `<select class="wb-src">${srcOptions(w.src)}</select>`}
+  function bindSrcChange(){const ss=ov.querySelector(".wb-src");if(ss)ss.onchange=()=>{w.src=ss.value;
+    const c=ov.querySelector(".wb-col");if(c)c.outerHTML=colSelect("wb-col",w.src,"");
+    const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));}}
+  function bindCard(){const ss=ov.querySelector(".wb-src");
+    const renderCols=()=>{const agg=ov.querySelector("#wb-agg").value;const box=ov.querySelector("#wb-cols");
+      if(agg==="count"){box.innerHTML=`<div class="wb-hint">Counts non-empty rows in range. No column needed.</div>`;return}
+      if(agg==="ratio"){box.innerHTML=`<label>A (numerator column)</label>${colSelect("wb-col",w.src,w.col)}<label>B (denominator column)</label>${colSelect("wb-col2",w.src,w.col2)}`;return}
+      if(agg==="math"){box.innerHTML=`<label>A column</label>${colSelect("wb-col",w.src,w.col)}<label>B column (optional)</label>${colSelect("wb-col2",w.src,w.col2)}<label>Expression (use A and B)</label><input id="wb-expr" value="${esc(w.expr||"A")}" placeholder="e.g. (A - B) / A">`;return}
+      box.innerHTML=`<label>Column</label>${colSelect("wb-col",w.src,w.col)}`};
+    renderCols();
+    ov.querySelector("#wb-agg").onchange=()=>{w.agg=ov.querySelector("#wb-agg").value;renderCols()};
+    if(ss)ss.onchange=()=>{w.src=ss.value;renderCols();const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src))}}
+  function bindTable(){const ss=ov.querySelector(".wb-src");w.cols=w.cols||[{header:"",col:""}];
+    const draw=()=>{const box=ov.querySelector("#wb-tblcols");box.innerHTML=w.cols.map((c,i)=>
+      `<div class="wb-colrow"><input class="wb-ch" data-i="${i}" value="${esc(c.header||"")}" placeholder="Header">${colSelect("wb-cc",w.src,c.col).replace('class="wb-cc"',`class="wb-cc" data-i="${i}"`)}<button class="wb-rm" data-i="${i}">✕</button></div>`).join("");
+      box.querySelectorAll(".wb-rm").forEach(b=>b.onclick=()=>{w.cols.splice(+b.dataset.i,1);if(!w.cols.length)w.cols=[{header:"",col:""}];draw()})};
+    draw();
+    ov.querySelector("#wb-addcol").onclick=()=>{w.cols.push({header:"",col:""});draw()};
+    if(ss)ss.onchange=()=>{w.src=ss.value;const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));draw()}}
+  fields();
+  ov.querySelector("#wb-type").onchange=fields;
+  const closeWb=()=>ov.classList.remove("show");
+  ov.querySelector(".wb-x").onclick=closeWb;ov.querySelector("#wb-cancel").onclick=closeWb;
+  ov.onclick=e=>{if(e.target===ov)closeWb()};
+  ov.querySelector("#wb-save").onclick=()=>{
+    w.type=ov.querySelector("#wb-type").value;w.title=ov.querySelector("#wb-title").value.trim()||"Untitled";
+    const g=s=>{const el=ov.querySelector(s);return el?el.value:""};
+    w.src=g(".wb-src");w.dateCol=g(".wb-date");
+    if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.gold=ov.querySelector("#wb-gold").checked;w.sub=g("#wb-sub").trim();
+      w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");}
+    else if(w.type==="bar"){w.col=g(".wb-col");}
+    else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;}
+    saveWidget(w);closeWb();rerenderTabWidgets(w.tab);}
+}
 async function doSync(){const btn=document.getElementById("syncBtn");btn.classList.add("spin");await loadData();
   STATUS.sync="synced "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});fullRender();btn.classList.remove("spin")}
 
@@ -463,8 +722,30 @@ function metricRow(tab,id,lbl){const m=CFG.map[tab+"."+id]||{};const dsel=m.date
   return `<div class="maprow" data-id="${id}"><div class="ml">${lbl}</div><div class="mr">
     <select class="m-src">${srcOpts(m.src)}</select>${colInput("m-col",m.src,m.col,false)}
     ${colInput("m-date",m.src,dsel,true)}</div></div>`}
+function injectModalTabs(){
+  const bar=document.querySelector(".mtabs");if(!bar)return;
+  const builtin=[["ceo","CEO"],["setter","Setter"],["closer","Closer"],["tables","Tables"]];
+  const customs=(CFG.customTabs||[]).map(t=>[t.id,t.name]);
+  bar.innerHTML=builtin.concat(customs).map(([id,lbl],i)=>`<button class="mt${i===0?' active':''}" data-mt="${id}">${esc(lbl)}</button>`).join("");
+  bar.querySelectorAll(".mt").forEach(b=>b.onclick=()=>{captureTab(curTab);bar.querySelectorAll(".mt").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderMap(b.dataset.mt)});
+}
 function renderMap(tab){curTab=tab;
   if(tab==="tables"){renderTables();return}
+  // Custom tabs: manage their widgets here (each widget carries its own data mapping).
+  if(!TABMETRICS[tab]){
+    const ws=widgetsFor(tab);
+    const list=ws.length?ws.map(w=>{
+      const srcName=(CFG.sources.find(s=>s.id===w.src)||{}).name||"(no source)";
+      const desc=w.type==="card"?`Scorecard · ${w.agg}${w.col?" · "+w.col:""}`:w.type==="bar"?`Bar · ${w.col||""}`:`Table · ${(w.cols||[]).length} cols`;
+      return `<div class="maprow"><div class="ml">${esc(w.title)}<div class="wsub">${esc(desc)} · ${esc(srcName)}</div></div>
+        <div class="mr"><button class="btn mini" data-wedit="${w.id}" data-wtab="${tab}">Edit</button><button class="btn mini" data-wdel="${w.id}" data-wtab="${tab}">Delete</button></div></div>`;
+    }).join(""):`<div class="empty-tab" style="padding:24px">No widgets on this tab yet.</div>`;
+    document.getElementById("mapList").innerHTML=list+`<div style="margin-top:12px"><button class="btn gold" data-waddmap="${tab}">+ Add Widget</button></div>`;
+    document.querySelectorAll("[data-wedit]").forEach(b=>b.onclick=()=>{const w=(CFG.widgets||[]).find(x=>x.id===b.dataset.wedit);openWidgetBuilder(b.dataset.wtab,JSON.parse(JSON.stringify(w)))});
+    document.querySelectorAll("[data-wdel]").forEach(b=>b.onclick=()=>{if(confirm("Delete this widget?")){delWidget(b.dataset.wdel);renderMap(tab);rerenderTabWidgets(tab)}});
+    document.querySelectorAll("[data-waddmap]").forEach(b=>b.onclick=()=>openWidgetBuilder(b.dataset.waddmap,null));
+    return;
+  }
   document.getElementById("mapList").innerHTML=TABMETRICS[tab].map(([id,lbl])=>metricRow(tab,id,lbl)).join("");
   document.querySelectorAll("#mapList .maprow").forEach(row=>{
     const ss=row.querySelector(".m-src"),cs=row.querySelector(".m-col"),ds=row.querySelector(".m-date");
@@ -488,19 +769,27 @@ function captureTab(tab){
   if(tab==="tables"){const g=q=>{const e=document.querySelector(q);return e?e.value:""};
     CFG.closesSrc={src:g(".cl-src"),dateCol:g(".cl-date"),nameCol:g(".cl-name"),cashCol:g(".cl-cash")};
     CFG.plansSrc={src:g(".pl-src"),nameCol:g(".pl-name"),dueCol:g(".pl-due"),statusCol:g(".pl-status"),amountCol:g(".pl-amount")};return}
+  if(!TABMETRICS[tab])return; // custom tabs manage widgets directly, nothing to capture
   document.querySelectorAll("#mapList .maprow").forEach(row=>{const id=row.dataset.id;if(!id)return;
     const src=row.querySelector(".m-src").value,col=row.querySelector(".m-col").value,dc=row.querySelector(".m-date").value;
     const key=tab+"."+id;if(src&&col&&dc)CFG.map[key]={src,col,dateCol:dc};else delete CFG.map[key]});
 }
 function initEvents(){
-  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
-    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.getElementById("page-"+t.dataset.page).classList.add("active");window.scrollTo({top:0,behavior:"smooth"})});
+  wireTabClicks();
+  // Delegated widget controls (edit / delete / reorder) on custom tabs.
+  document.body.addEventListener("click",e=>{const b=e.target.closest(".wbtn");if(!b)return;
+    const id=b.dataset.id,act=b.dataset.act;const w=(CFG.widgets||[]).find(x=>x.id===id);if(!w)return;
+    if(act==="del"){if(confirm("Delete this widget?")){delWidget(id);rerenderTabWidgets(w.tab)}}
+    else if(act==="edit"){openWidgetBuilder(w.tab,JSON.parse(JSON.stringify(w)))}
+    else if(act==="up"){moveWidget(id,-1);rerenderTabWidgets(w.tab)}
+    else if(act==="down"){moveWidget(id,1);rerenderTabWidgets(w.tab)}});
   document.getElementById("preset").onchange=e=>{applyPreset(e.target.value);fullRender()};
   document.getElementById("fromDate").onchange=()=>{document.getElementById("preset").value="custom";fullRender()};
   document.getElementById("toDate").onchange=()=>{document.getElementById("preset").value="custom";fullRender()};
   document.getElementById("syncBtn").onclick=doSync;
   const ov=document.getElementById("overlay");
   document.getElementById("settingsBtn").onclick=()=>{document.getElementById("demoToggle").checked=CFG.demo;document.getElementById("goalInput").value=CFG.goal;document.getElementById("tokenInput").value=CFG.token||"";
+    injectModalTabs();
     renderSources();document.querySelectorAll(".mt").forEach(b=>b.classList.toggle("active",b.dataset.mt==="ceo"));renderMap("ceo");ov.classList.add("show")};
   document.getElementById("addSrc").onclick=()=>{CFG.sources.push({id:"s"+Date.now()+Math.floor(Math.random()*999),name:"",sheetUrl:"",sheetId:"",tab:"",headers:[]});renderSources()};
   document.querySelectorAll(".mt").forEach(b=>b.onclick=()=>{captureTab(curTab);document.querySelectorAll(".mt").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderMap(b.dataset.mt)});
@@ -509,10 +798,21 @@ function initEvents(){
   document.getElementById("saveModal").onclick=async()=>{captureTab(curTab);CFG.demo=document.getElementById("demoToggle").checked;CFG.goal=document.getElementById("goalInput").value.trim();CFG.token=document.getElementById("tokenInput").value.trim();
     await saveSharedCfg();close();await doSync()};
 }
-async function boot(){if(typeof Chart==="undefined"){setTimeout(boot,120);return}
-  await loadSharedCfg(); // pull team config before first render
-  document.getElementById("preset").value="this_month";applyPreset("this_month");initEvents();doSync();
-  setInterval(()=>{if(!CFG.demo)doSync()},300000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!CFG.demo)doSync()})}
+async function boot(){
+  await loadSharedCfg(); // pull team config before first render (safe if offline)
+  syncCustomTabsUI(); // build any saved custom tabs + pages
+  const addBtn=document.getElementById("addTabBtn");if(addBtn)addBtn.onclick=addCustomTab;
+  initEvents();
+  document.getElementById("preset").value="this_month";applyPreset("this_month");
+  // Charts need the Chart.js CDN; if it's not ready yet, render once it loads,
+  // but DON'T block the rest of the dashboard (tabs/widgets/buttons) on it.
+  const startData=()=>{doSync();
+    setInterval(()=>{if(!CFG.demo)doSync()},300000);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!CFG.demo)doSync()})};
+  if(typeof Chart==="undefined"){
+    let tries=0;const wait=setInterval(()=>{tries++;if(typeof Chart!=="undefined"||tries>40){clearInterval(wait);startData()}},120);
+  }else startData();
+}
 window.addEventListener("load",boot);
 </script>
 </body>
