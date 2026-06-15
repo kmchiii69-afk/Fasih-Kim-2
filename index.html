@@ -367,8 +367,13 @@ function cSeries(spec,from,to){
 }
 function cTableRows(spec,from,to){
   const src=SRC[spec.src];if(!src)return [];
-  return src.rows.filter(r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false})
-    .map(r=>(spec.cols||[]).map(c=>r[c.col]??""));
+  const cols=spec.cols||[];
+  return src.rows
+    .filter(r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false})
+    .map(r=>cols.map(c=>r[c.col]??""))
+    // Drop rows where every displayed cell is blank/empty — sheet has trailing
+    // blank rows with just a date filled in.
+    .filter(cells=>cells.some(v=>String(v??"").trim()!==""));
 }
 function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
 function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
