@@ -68,6 +68,34 @@ export default async function handler(req, res) {
       requestBody: { values: [row] },
     });
 
+    // Post the filled EOD summary to Discord (best-effort; never blocks the save).
+    const webhook = process.env.DISCORD_EOD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+    if (webhook) {
+      const closer = body.closer || "George";
+      const fmtMoney = (n) => "$" + Number(num(n)).toLocaleString("en-US");
+      const lines = [
+        `**${closer} just submitted his EOD form**`,
+        `Calls Taken: ${num(body.m_qual)}`,
+        `Calls Closed: ${num(body.m_closed)}`,
+        `Calls Rescheduled: ${num(body.m_resched)}`,
+        `Calls DQ: ${num(body.m_disq)}`,
+        `Cancellations: ${num(body.cancellations)}`,
+        `Offers Pitched: ${num(body.m_offers)}`,
+        `No Shows: ${num(body.noShowCount)}`,
+        `Leads That No Showed: ${(body.noShowNames || []).filter(Boolean).join(", ") || "0"}`,
+        `Cash Collected: ${fmtMoney(body.m_cash)}`,
+        `Commission: ${fmtMoney(body.m_comm)}`,
+        `Rev Generated: ${fmtMoney(body.m_rev)}`,
+      ];
+      try {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: lines.join("\n") }),
+        });
+      } catch (e) { /* Discord failure must not fail the submission */ }
+    }
+
     return send(res, 200, { ok: true, written: row });
   } catch (err) {
     return send(res, 500, { error: (err && err.message) || String(err) });
