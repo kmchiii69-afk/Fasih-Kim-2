@@ -25,6 +25,9 @@
   .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .subline{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap}
   .subline .dia{color:var(--gold);font-size:9px}
+  .date-edit{position:relative;display:inline-block;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s}
+  .date-edit:hover{color:var(--gold)}
+  .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;color-scheme:dark}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
   .callout b{color:var(--gold-lite)}
@@ -116,7 +119,7 @@
 
   <div class="hero">
     <h1>End of Day <span class="gold">Report</span></h1>
-    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span id="dateLbl"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
+    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span class="date-edit" title="Click to change submission date"><span id="dateText"></span><input type="date" id="dateInput"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
     <div class="divider"></div>
   </div>
 
@@ -180,9 +183,47 @@ function band(s){return s>=85?"s-top":s>=65?"s-strong":s>=45?"s-partial":s>=25?"
 let noShows=[];
 let cancelled=[];
 let submitted=false;
-const dateKey=new Date().toISOString().slice(0,10);
-const dateLbl=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-$("dateLbl").textContent=dateLbl;
+let dateKey=new Date().toISOString().slice(0,10);
+let dateLbl=fmtDateLbl(dateKey);
+function fmtDateLbl(key){
+  // Parse as a calendar date (no UTC drift) so 2026-06-16 stays Tuesday.
+  const [y,m,d]=key.split("-").map(Number);
+  return new Date(y,m-1,d).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+$("dateText").textContent=dateLbl;
+$("dateInput").value=dateKey;
+$("dateInput").max=new Date().toISOString().slice(0,10); // no future-dating
+$("dateInput").addEventListener("change",e=>setDate(e.target.value));
+
+function hasContent(){
+  // Anything filled? Any auto field non-zero, any chip, or m_cancel/m_noshow > 0.
+  const autoFilled=AUTO.some(([id])=>+$(id).value>0);
+  return autoFilled||cancelled.length>0||noShows.length>0||(+$("m_cancel").value||0)>0||(+$("m_noshow").value||0)>0;
+}
+function resetForm(){
+  AUTO.forEach(([id])=>{const el=$(id);if(el)el.value=0});
+  $("m_cancel").value=0;$("m_noshow").value=0;
+  noShows=[];cancelled=[];syncNoShow();syncCancel();
+  submitted=false;lock(false);
+  $("submitBtn").textContent="Submit EOD";$("submitBtn").classList.remove("done");
+  $("status").textContent="";$("reopenBtn").style.display="none";
+  $("callout").innerHTML="<b>@George</b> — auto-filled from <b id=\"callCount\">"+CALLS.length+"</b> Fathom calls today. Review the calls below, verify the auto-filled metrics, complete the three you fill manually, then submit. It posts to the dashboard the moment you hit submit.";
+  updateSummary();
+}
+function setDate(newKey){
+  if(!newKey||newKey===dateKey){$("dateInput").value=dateKey;return}
+  // If the form has unsaved data, confirm before swapping context.
+  if(!submitted&&hasContent()){
+    if(!confirm("Discard current data and load the EOD for "+fmtDateLbl(newKey)+"?")){
+      $("dateInput").value=dateKey;return;
+    }
+  }
+  dateKey=newKey;dateLbl=fmtDateLbl(newKey);
+  $("dateText").textContent=dateLbl;$("dateInput").value=dateKey;
+  resetForm();
+  loadSaved(); // restore a prior submission for that date, if any
+}
+
 $("callCount").textContent=CALLS.length;
 
 function renderCalls(){
