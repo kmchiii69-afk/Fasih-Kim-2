@@ -67,8 +67,6 @@ Score the LEAD (the prospect, not the closer) on five ICP factors. Max points pe
 
 Then classify call OUTCOME. Valid outcome tags (zero or more): "Offer Pitched", "Closed", "Rescheduled".
 Identify the OFFER if one was pitched: one of "Brand Architect", "Acquisition Mastery", "Advisory Group", or null.
-Deal values: Brand Architect = $14k PIF / $15k plan; Acquisition Mastery = $30k; Advisory Group = $45k.
-On a payment plan, cash collected (deposit) is LESS than revenue (contract value).
 
 Return ONLY valid JSON, no markdown, no preamble, with this exact shape:
 {
@@ -93,13 +91,23 @@ function leadNameFromMeeting(m) {
   return ext?.name || m.meeting_title || m.title || "Unknown Lead";
 }
 
-// Titles that mean "internal/group" — these calls are dropped no matter who's on
-// them. Matching is case-insensitive and substring-based, so "Weekly Sales Huddle"
-// and "Team Calls - Monday" both get caught. Add more phrases as needed.
+// Titles that mean "internal" — these calls are dropped no matter who's on them.
+// Matching is case-insensitive and substring-based, so "Weekly Sales Huddle"
+// and "Team Call - Monday" both get caught. Add more phrases as needed.
 const TITLE_BLOCKLIST = [
   "sales huddle",
-  "team calls",
-  "mastermind",
+  "team call",
+  "team meeting",
+  "standup",
+  "stand-up",
+  "internal",
+  "huddle",
+  "1:1",
+  "1-1",
+  "all hands",
+  "all-hands",
+  "weekly sync",
+  "daily sync",
 ];
 
 function isInternalTitle(m) {
@@ -111,10 +119,22 @@ function hasExternalInvitee(m) {
   return (m.calendar_invitees || []).some((i) => i.is_external);
 }
 
+// One-off exclusion: drop any call where Lazar is on the invite list, regardless
+// of whether the title or external-invitee checks would otherwise pass.
+const INVITEE_EMAIL_BLOCKLIST = ["lazzartopalovic@gmail.com"];
+function hasBlockedInvitee(m) {
+  const invitees = m.calendar_invitees || [];
+  return invitees.some((i) => {
+    const email = String(i.email || "").trim().toLowerCase();
+    return INVITEE_EMAIL_BLOCKLIST.includes(email);
+  });
+}
+
 // A call counts as a real sales call only if its title isn't on the blocklist
-// AND it has at least one external (prospect) invitee.
+// AND it has at least one external (prospect) invitee AND no invitee email
+// is on the exclusion list.
 function isSalesCall(m) {
-  return !isInternalTitle(m) && hasExternalInvitee(m);
+  return !isInternalTitle(m) && !hasBlockedInvitee(m) && hasExternalInvitee(m);
 }
 
 async function scoreCall(anthropicKey, m) {
