@@ -120,12 +120,9 @@
 .widget .wctrl{position:absolute;top:8px;right:8px;display:none;gap:3px;z-index:5}
 /* Controls only render in edit mode, and only on hover */
 body.editing .widget:hover .wctrl{display:flex}
-body.editing .widget.locked:hover .wctrl{display:flex}
-.widget.locked .wbtn.del,.widget.locked .wbtn.edit{display:none}
-/* Subtle dashed outline on editable widgets in edit mode, so they look re-arrangeable */
+/* Subtle dashed outline on editable widgets in edit mode */
 body.editing .widget{outline:1px dashed transparent;outline-offset:4px;transition:outline-color .15s}
 body.editing .widget:hover{outline-color:rgba(216,169,79,.35)}
-body.editing .widget.locked:hover{outline-color:rgba(255,255,255,.10)}
 /* Mode button — flips appearance when active */
 #modeBtn.on{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
 .edit-only{display:none}
@@ -479,7 +476,6 @@ const BUILTIN_DEFS={
     {key:"icpLeads",type:"card",title:"ICP Leads",compute:"setterICP"},
     {key:"newConvos",type:"card",title:"New Conversations",compute:"setterNewConvos"},
     {key:"proposed",type:"card",title:"Calls Proposed",compute:"setterProposed"},
-    {key:"pitchRate",type:"card",title:"Pitch Rate",compute:"setterPitchRate"},
     {key:"followUps",type:"card",title:"Follow Ups",compute:"setterFollowUps"},
     {key:"obReplyRate",type:"card",title:"Outbound Reply Rate",compute:"setterOBReply"},
     {key:"chartBooked",type:"bar",title:"Qualified Booked Calls",compute:"barSetter:qualifiedBookedCalls"},
@@ -495,7 +491,6 @@ const BUILTIN_DEFS={
     {key:"disq",type:"card",title:"Disqualified Calls",compute:"closerDisq"},
     {key:"closed",type:"card",title:"Calls Closed",compute:"closerClosed"},
     {key:"offers",type:"card",title:"Offers Pitched",compute:"closerOffers"},
-    {key:"pitchRate",type:"card",title:"Pitch Rate",compute:"closerPitchRate"},
     {key:"resched",type:"card",title:"Reschedules",compute:"closerResched"},
     {key:"noShows",type:"card",title:"No Shows",compute:"closerNoShows"},
     {key:"cancellations",type:"card",title:"Cancellations",compute:"closerCancellations"},
@@ -613,12 +608,13 @@ function widgetCtrl(orderKey,locked){
   return `<div class="wctrl"><button class="wbtn" data-act="up" data-key="${esc(orderKey)}" title="Move up">↑</button><button class="wbtn" data-act="down" data-key="${esc(orderKey)}" title="Move down">↓</button><button class="wbtn edit" data-act="edit" data-key="${esc(orderKey)}" title="Edit">✎</button><button class="wbtn del" data-act="del" data-key="${esc(orderKey)}" title="Delete">✕</button></div>`;
 }
 
-// Make sure CFG.order[tab] has every current built-in + every existing custom widget
-// for that tab. Idempotent. First call seeds canonical order; later calls append
-// anything new (e.g. just-added widget) and strip stale keys.
+// Make sure CFG.order[tab] has every current built-in (except hidden ones)
+// + every existing custom widget for that tab. Idempotent.
 function ensureOrder(tab){
   CFG.order=CFG.order||{};
-  const builtinKeys=(BUILTIN_DEFS[tab]||[]).map(d=>biKey(tab,d.key));
+  CFG.hiddenBuiltins=CFG.hiddenBuiltins||{};
+  const hidden=new Set(CFG.hiddenBuiltins[tab]||[]);
+  const builtinKeys=(BUILTIN_DEFS[tab]||[]).map(d=>biKey(tab,d.key)).filter(k=>!hidden.has(k));
   const customKeys=(CFG.widgets||[]).filter(w=>w.tab===tab).map(w=>widgetKey(w.id));
   let order=CFG.order[tab];
   if(!Array.isArray(order)||!order.length){
@@ -627,12 +623,25 @@ function ensureOrder(tab){
   builtinKeys.forEach(k=>{if(!order.includes(k))order.push(k)});
   customKeys.forEach(k=>{if(!order.includes(k))order.push(k)});
   CFG.order[tab]=order.filter(k=>{
-    if(isBuiltinKey(k)){const p=parseKey(k);return !!findBuiltinDef(p.tab,p.key)}
+    if(isBuiltinKey(k)){const p=parseKey(k);return !!findBuiltinDef(p.tab,p.key)&&!hidden.has(k)}
     const p=parseKey(k);return (CFG.widgets||[]).some(w=>w.id===p.id&&w.tab===tab);
   });
 }
 function resetTabLayout(tab){
-  CFG.order=CFG.order||{};delete CFG.order[tab];ensureOrder(tab);saveSharedCfg();renderTab(tab);
+  CFG.order=CFG.order||{};delete CFG.order[tab];
+  CFG.hiddenBuiltins=CFG.hiddenBuiltins||{};delete CFG.hiddenBuiltins[tab];
+  CFG.builtinOverrides=CFG.builtinOverrides||{};delete CFG.builtinOverrides[tab];
+  ensureOrder(tab);saveSharedCfg();renderTab(tab);
+}
+function getBuiltinOverride(tab,key){
+  return (CFG.builtinOverrides&&CFG.builtinOverrides[tab]&&CFG.builtinOverrides[tab][key])||{};
+}
+function setBuiltinOverride(tab,key,ovr){
+  CFG.builtinOverrides=CFG.builtinOverrides||{};
+  CFG.builtinOverrides[tab]=CFG.builtinOverrides[tab]||{};
+  if(!ovr||(ovr.title==null&&ovr.gold==null))delete CFG.builtinOverrides[tab][key];
+  else CFG.builtinOverrides[tab][key]=ovr;
+  saveSharedCfg();
 }
 
 // Build one renderable piece for a single order key. Returns:
@@ -643,19 +652,22 @@ function buildPiece(tab,orderKey,ctx){
   const parsed=parseKey(orderKey);
   if(parsed.kind==="builtin"){
     const def=findBuiltinDef(parsed.tab,parsed.key);if(!def)return null;
-    const ctrl=widgetCtrl(orderKey,true);
+    const ovr=getBuiltinOverride(parsed.tab,parsed.key);
+    const title=ovr.title!=null?ovr.title:def.title;
+    const ctrl=widgetCtrl(orderKey,false);
     if(def.type==="card"){
       const fn=BUILTIN_COMPUTE[def.compute];if(!fn)return null;
       const r=fn(ctx)||{};
-      const goldCls=r.gold?" gold":"";
+      const goldOn=ovr.gold!=null?!!ovr.gold:!!r.gold;
+      const goldCls=goldOn?" gold":"";
       const sub=r.sub?`<div class="sub">${esc(r.sub)}</div>`:"";
-      return{kind:"card",html:`<div class="card${goldCls} widget locked" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(def.title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}</div>`};
+      return{kind:"card",html:`<div class="card${goldCls} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}</div>`};
     }
     if(def.type==="bar"){
       const cid="bi_"+parsed.tab+"_"+parsed.key;
       const {field,rows}=resolveBar(def.compute,ctx);
       return{kind:"bar",
-        html:`<div class="chart-card widget locked" data-key="${esc(orderKey)}">${ctrl}<h4>${esc(def.title)} — daily</h4><div class="chart-box"><canvas id="${cid}"></canvas></div></div>`,
+        html:`<div class="chart-card widget" data-key="${esc(orderKey)}">${ctrl}<h4>${esc(title)} — daily</h4><div class="chart-box"><canvas id="${cid}"></canvas></div></div>`,
         after:()=>drawBuiltinBar(cid,rows,field,ctx.from,ctx.to)};
     }
     if(def.type==="table"){
@@ -664,12 +676,12 @@ function buildPiece(tab,orderKey,ctx){
       if(r.kind==="closesTable"){
         const cl=(r.rows||[]).slice().sort((a,b)=>b.date-a.date);
         const body=cl.length?cl.slice(0,200).map(x=>`<tr><td>${fmtDate(x.date)}</td><td class="kpi">${esc(x.name||"—")}</td><td class="num">${fmtMoney(x.cashCollected)}</td></tr>`).join(""):`<tr><td colspan="3" class="empty">No closes in this range</td></tr>`;
-        return{kind:"full",html:`<div class="tbl-card widget locked" data-key="${esc(orderKey)}">${ctrl}<div class="tbl-bar"><span class="t">${esc(def.title)}</span><span class="c">${cl.length} in range</span></div><div class="tbl-scroll"><table><thead><tr><th>Date</th><th>Name</th><th class="num">Cash Collected</th></tr></thead><tbody>${body}</tbody></table></div></div>`};
+        return{kind:"full",html:`<div class="tbl-card widget" data-key="${esc(orderKey)}">${ctrl}<div class="tbl-bar"><span class="t">${esc(title)}</span><span class="c">${cl.length} in range</span></div><div class="tbl-scroll"><table><thead><tr><th>Date</th><th>Name</th><th class="num">Cash Collected</th></tr></thead><tbody>${body}</tbody></table></div></div>`};
       }
       if(r.kind==="plansTable"){
         const pl=(r.rows||[]).slice().sort((a,b)=>a.dueDate-b.dueDate);
         const body=pl.length?pl.map(x=>{const paid=isPaid(x.status);return `<tr><td class="kpi">${esc(x.name||"—")}</td><td>${fmtDate(x.dueDate)}</td><td><span class="status ${paid?'paid':'unpaid'}">${paid?'Paid':'Not Paid'}</span></td><td class="num">${fmtMoney(x.amountDue)}</td></tr>`}).join(""):`<tr><td colspan="4" class="empty">No payment plans in this range</td></tr>`;
-        return{kind:"full",html:`<div class="tbl-card widget locked" data-key="${esc(orderKey)}">${ctrl}<div class="tbl-bar"><span class="t">${esc(def.title)}</span><span class="c">${pl.length} in range</span></div><div class="tbl-scroll"><table><thead><tr><th>Name</th><th>Due Date</th><th>Status</th><th class="num">Amount Due</th></tr></thead><tbody>${body}</tbody></table></div></div>`};
+        return{kind:"full",html:`<div class="tbl-card widget" data-key="${esc(orderKey)}">${ctrl}<div class="tbl-bar"><span class="t">${esc(title)}</span><span class="c">${pl.length} in range</span></div><div class="tbl-scroll"><table><thead><tr><th>Name</th><th>Due Date</th><th>Status</th><th class="num">Amount Due</th></tr></thead><tbody>${body}</tbody></table></div></div>`};
       }
     }
     return null;
@@ -780,11 +792,35 @@ function saveWidget(w){
   const k=widgetKey(w.id);if(!CFG.order[w.tab].includes(k))CFG.order[w.tab].push(k);
   saveSharedCfg();
 }
-function delWidget(id){
+function delWidget(idOrKey){
+  // Accepts either a built-in order key ("bi:ceo:...") or a custom widget id.
+  if(typeof idOrKey==="string"&&isBuiltinKey(idOrKey)){
+    const p=parseKey(idOrKey);
+    CFG.hiddenBuiltins=CFG.hiddenBuiltins||{};
+    CFG.hiddenBuiltins[p.tab]=CFG.hiddenBuiltins[p.tab]||[];
+    if(!CFG.hiddenBuiltins[p.tab].includes(idOrKey))CFG.hiddenBuiltins[p.tab].push(idOrKey);
+    if(CFG.order&&Array.isArray(CFG.order[p.tab]))CFG.order[p.tab]=CFG.order[p.tab].filter(k=>k!==idOrKey);
+    saveSharedCfg();return;
+  }
+  const id=idOrKey;
   const w=(CFG.widgets||[]).find(x=>x.id===id);
   CFG.widgets=(CFG.widgets||[]).filter(x=>x.id!==id);
   if(w&&CFG.order&&CFG.order[w.tab])CFG.order[w.tab]=CFG.order[w.tab].filter(k=>k!==widgetKey(id));
   saveSharedCfg();
+}
+// Edit a built-in tile: rename only. Formula and styling stay locked.
+function editBuiltin(orderKey){
+  const p=parseKey(orderKey);if(p.kind!=="builtin")return;
+  const def=findBuiltinDef(p.tab,p.key);if(!def)return;
+  const ovr=getBuiltinOverride(p.tab,p.key);
+  const curTitle=ovr.title!=null?ovr.title:def.title;
+  const newTitle=prompt(`Tile title (blank to reset to "${def.title}"):`,curTitle);
+  if(newTitle===null)return;
+  const t=newTitle.trim();
+  const next={...ovr};
+  if(!t||t===def.title)delete next.title;else next.title=t;
+  setBuiltinOverride(p.tab,p.key,Object.keys(next).length?next:null);
+  renderTab(p.tab);
 }
 // Move by order-key (works for both built-in and custom widgets).
 function moveWidget(orderKey,dir){
@@ -985,7 +1021,7 @@ function captureTab(tab){
 }
 function initEvents(){
   wireTabClicks();
-  // Delegated widget controls — works for both built-in (locked) and custom widgets.
+  // Delegated widget controls — works for both built-in and custom widgets.
   document.body.addEventListener("click",e=>{
     const b=e.target.closest(".wbtn");if(!b)return;
     const key=b.dataset.key,act=b.dataset.act;if(!key)return;
@@ -995,10 +1031,16 @@ function initEvents(){
     else{const w=(CFG.widgets||[]).find(x=>x.id===parsed.id);if(!w)return;tab=w.tab}
     if(act==="up"){moveWidget(key,-1);renderTab(tab);return}
     if(act==="down"){moveWidget(key,1);renderTab(tab);return}
-    // Built-ins are locked: edit/del are ignored (CSS also hides them).
-    if(parsed.kind==="builtin")return;
-    if(act==="del"){if(confirm("Delete this widget?")){delWidget(parsed.id);renderTab(tab)}}
-    else if(act==="edit"){const w=(CFG.widgets||[]).find(x=>x.id===parsed.id);if(w)openWidgetBuilder(tab,JSON.parse(JSON.stringify(w)))}
+    if(act==="del"){
+      if(!confirm("Delete this tile? Built-in tiles can be brought back via Reset Layout."))return;
+      if(parsed.kind==="builtin")delWidget(key);else delWidget(parsed.id);
+      renderTab(tab);return;
+    }
+    if(act==="edit"){
+      if(parsed.kind==="builtin"){editBuiltin(key);return}
+      const w=(CFG.widgets||[]).find(x=>x.id===parsed.id);
+      if(w)openWidgetBuilder(tab,JSON.parse(JSON.stringify(w)));
+    }
   });
   // Edit/View mode toggle — per-browser, never affects other devices.
   const modeBtn=document.getElementById("modeBtn");
