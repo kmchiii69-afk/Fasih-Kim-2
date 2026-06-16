@@ -147,6 +147,12 @@
     <input type="text" id="nsInput" placeholder="Type a name and press Enter…">
     <div class="hint">Each name you add bumps the No-Shows count above. These flow into the dashboard's no-show list.</div>
   </div>
+  <div class="chipbox" style="margin-top:13px">
+    <div class="mlabel">Names of Leads who Cancelled <span class="badge fill">YOU</span></div>
+    <div class="chips" id="cnChips"></div>
+    <input type="text" id="cnInput" placeholder="Type a name and press Enter…">
+    <div class="hint">Each name you add bumps the Cancellations count above. These flow into the dashboard's cancellations list.</div>
+  </div>
 </div>
 
 <div class="bar">
@@ -172,6 +178,7 @@ const isQ=c=>totalScore(c.factors)>=QUALIFY_AT;
 function band(s){return s>=85?"s-top":s>=65?"s-strong":s>=45?"s-partial":s>=25?"s-weak":"s-no"}
 
 let noShows=[];
+let cancelled=[];
 let submitted=false;
 const dateKey=new Date().toISOString().slice(0,10);
 const dateLbl=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
@@ -221,9 +228,14 @@ function renderAuto(){
 
 function renderChips(){
   $("nsChips").innerHTML=noShows.map((n,i)=>`<span class="chip">${n}<x data-i="${i}">×</x></span>`).join("");
-  document.querySelectorAll(".chip x").forEach(x=>x.onclick=()=>{noShows.splice(+x.dataset.i,1);syncNoShow()});
+  document.querySelectorAll("#nsChips x").forEach(x=>x.onclick=()=>{noShows.splice(+x.dataset.i,1);syncNoShow()});
 }
 function syncNoShow(){renderChips();$("m_noshow").value=noShows.length;updateSummary()}
+function renderCancelChips(){
+  $("cnChips").innerHTML=cancelled.map((n,i)=>`<span class="chip">${n}<x data-i="${i}">×</x></span>`).join("");
+  document.querySelectorAll("#cnChips x").forEach(x=>x.onclick=()=>{cancelled.splice(+x.dataset.i,1);syncCancel()});
+}
+function syncCancel(){renderCancelChips();$("m_cancel").value=cancelled.length;updateSummary()}
 
 function updateSummary(){
   const cash=(+$("m_cash").value||0),rev=(+$("m_rev").value||0),closed=(+$("m_closed").value||0),q=(+$("m_qual").value||0);
@@ -236,6 +248,7 @@ function collect(){
   const o={date:dateKey,closer:"George"};
   AUTO.forEach(([id,lbl])=>o[id]=(+$(id).value||0));
   o.cancellations=(+$("m_cancel").value||0);o.noShowCount=(+$("m_noshow").value||0);o.noShowNames=[...noShows];
+  o.cancelledNames=[...cancelled];
   return o;
 }
 function lock(s){document.body.classList.toggle("locked",s)}
@@ -263,6 +276,7 @@ async function loadSaved(){
     if(r&&r.value){const d=JSON.parse(r.value);
       AUTO.forEach(([id])=>{if(d[id]!=null)$(id).value=d[id]});
       $("m_cancel").value=d.cancellations||0;noShows=d.noShowNames||[];syncNoShow();
+      cancelled=d.cancelledNames||[];syncCancel();
       doSubmit();
     }
   }catch(e){}
@@ -285,9 +299,11 @@ async function loadCalls(){
 
 async function init(){
   await loadCalls();
-  renderCalls();renderAuto();renderChips();updateSummary();
+  renderCalls();renderAuto();renderChips();renderCancelChips();updateSummary();
   $("nsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){noShows.push(e.target.value.trim());e.target.value="";syncNoShow()}});
+  $("cnInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){cancelled.push(e.target.value.trim());e.target.value="";syncCancel()}});
   $("m_noshow").addEventListener("input",updateSummary);
+  $("m_cancel").addEventListener("input",updateSummary);
   $("submitBtn").onclick=()=>{if(!submitted)doSubmit()};
   $("reopenBtn").onclick=reopen;
   loadSaved();
