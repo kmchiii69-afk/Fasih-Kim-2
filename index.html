@@ -340,18 +340,48 @@ function assembleTab(tab,defs){
 //               expr (math, uses A=col,B=col2), fmt:'number|money|percent', gold}
 // type "bar":  {src,col,dateCol,title, fmt}
 // type "table":{src,dateCol, cols:[{header,col}]}
+// Resolve a widget's stored column name against the source's current headers.
+// Falls back through: exact match → prefix match → case-insensitive prefix →
+// case-insensitive contains. Lets you tweak a Google Form's description text
+// (e.g. "(Number only, no text)") without breaking any widget that points at
+// that column. The result is cached per (src,col) so this isn't run hot.
+const _colCache = new Map();
+function resolveCol(src, want) {
+  if (!src || !want) return want;
+  const headers = src.headers || [];
+  const cacheKey = (src._id || "") + "|" + want;
+  if (_colCache.has(cacheKey)) return _colCache.get(cacheKey);
+  let hit = headers.find(h => h === want);
+  if (!hit) {
+    const norm = s => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const w = norm(want);
+    hit = headers.find(h => norm(h).startsWith(w));
+    if (!hit) hit = headers.find(h => norm(h).includes(w));
+  }
+  const resolved = hit || want;
+  _colCache.set(cacheKey, resolved);
+  return resolved;
+}
+// Bust the cache whenever source data is reloaded (assembleTab clears it).
+function clearColCache() { _colCache.clear(); }
+// Read a cell using the resolved column name.
+function getCell(src, row, want) { return row[resolveCol(src, want)]; }
+
 function cAgg(spec,from,to){
   const src=SRC[spec.src];if(!src)return null;
-  const inRange=r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false};
+  const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
+  const colR=spec.col?resolveCol(src,spec.col):null;
+  const col2R=spec.col2?resolveCol(src,spec.col2):null;
+  const inRange=r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false};
   const rows=src.rows.filter(inRange);
   const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
   const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
-  if(spec.agg==="count")return cntCol(spec.col||spec.dateCol||Object.keys(src.rows[0]||{})[0]);
-  if(spec.agg==="avg"){const n=cntCol(spec.col);return n?sumCol(spec.col)/n:0}
-  if(spec.agg==="ratio"){const b=sumCol(spec.col2);return b?sumCol(spec.col)/b:0}
-  if(spec.agg==="math"){const A=sumCol(spec.col),B=spec.col2?sumCol(spec.col2):0;
+  if(spec.agg==="count")return cntCol(colR||dateColR||Object.keys(src.rows[0]||{})[0]);
+  if(spec.agg==="avg"){const n=cntCol(colR);return n?sumCol(colR)/n:0}
+  if(spec.agg==="ratio"){const b=sumCol(col2R);return b?sumCol(colR)/b:0}
+  if(spec.agg==="math"){const A=sumCol(colR),B=col2R?sumCol(col2R):0;
     try{return Function("A","B","return ("+(spec.expr||"A")+")")(A,B)}catch(e){return 0}}
-  return sumCol(spec.col); // default sum
+  return sumCol(colR); // default sum
 }
 function cFmt(v,fmt){if(v==null||isNaN(v))return "—";
   if(fmt==="money")return fmtMoney(Math.round(v));
@@ -360,16 +390,19 @@ function cFmt(v,fmt){if(v==null||isNaN(v))return "—";
 // Daily series for a custom bar chart, respecting the date range.
 function cSeries(spec,from,to){
   const src=SRC[spec.src];if(!src||!spec.dateCol)return [];
+  const dateColR=resolveCol(src,spec.dateCol),colR=resolveCol(src,spec.col);
   const map={};
-  src.rows.forEach(r=>{const d=toDate(r[spec.dateCol]);if(!d||!inR(d,from,to))return;
-    const k=iso(d);map[k]=(map[k]||0)+toNum(r[spec.col])});
+  src.rows.forEach(r=>{const d=toDate(r[dateColR]);if(!d||!inR(d,from,to))return;
+    const k=iso(d);map[k]=(map[k]||0)+toNum(r[colR])});
   return Object.entries(map).map(([k,v])=>({date:new Date(k),v})).sort((a,b)=>a.date-b.date);
 }
 function cTableRows(spec,from,to){
   const src=SRC[spec.src];if(!src)return [];
+  const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
+  const colsR=(spec.cols||[]).map(c=>({...c,_resolved:resolveCol(src,c.col)}));
   return src.rows
-    .filter(r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false})
-    .map(r=>(spec.cols||[]).map(c=>r[c.col]??""));
+    .filter(r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false})
+    .map(r=>colsR.map(c=>r[c._resolved]??""));
 }
 function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
 function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
@@ -380,10 +413,11 @@ const hasSources=()=>CFG.sources.some(s=>s.sheetId&&s.tab);
 async function loadData(){
   if(CFG.demo||!hasSources()){const d=genDemo();RAW.ceo=d.daily;RAW.setter=d.daily;RAW.closer=d.daily;RAW.closes=d.closes;RAW.plans=d.plans;setConn("demo");return}
   try{
+    clearColCache();
     await Promise.all(CFG.sources.map(async s=>{
-      if(!s.sheetId||!s.tab){SRC[s.id]={rows:[],headers:s.headers||[]};return}
-      try{const d=await apiGet(s.sheetId,s.tab);SRC[s.id]={rows:d.rows||[],headers:(d.headers&&d.headers.length)?d.headers:(d.rows&&d.rows[0]?Object.keys(d.rows[0]):(s.headers||[]))}}
-      catch(e){SRC[s.id]={rows:[],headers:s.headers||[]}}
+      if(!s.sheetId||!s.tab){SRC[s.id]={_id:s.id,rows:[],headers:s.headers||[]};return}
+      try{const d=await apiGet(s.sheetId,s.tab);SRC[s.id]={_id:s.id,rows:d.rows||[],headers:(d.headers&&d.headers.length)?d.headers:(d.rows&&d.rows[0]?Object.keys(d.rows[0]):(s.headers||[]))}}
+      catch(e){SRC[s.id]={_id:s.id,rows:[],headers:s.headers||[]}}
     }));
     RAW.ceo=assembleTab("ceo",M_CEO);RAW.setter=assembleTab("setter",M_SETTER);RAW.closer=assembleTab("closer",M_CLOSER);
     RAW.closes=assembleCloses();RAW.plans=assemblePlans();setConn("live");
