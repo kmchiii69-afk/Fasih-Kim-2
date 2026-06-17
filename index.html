@@ -367,14 +367,9 @@ function cSeries(spec,from,to){
 }
 function cTableRows(spec,from,to){
   const src=SRC[spec.src];if(!src)return [];
-  const cols=spec.cols||[];
   return src.rows
     .filter(r=>{if(!spec.dateCol)return true;const d=toDate(r[spec.dateCol]);return d?inR(d,from,to):false})
-    // Drop rows where every NON-DATE displayed cell is blank. The date column,
-    // if shown, is metadata — its presence shouldn't keep an otherwise-empty
-    // row alive (e.g. a no-shows table where George had no no-shows that day).
-    .filter(r=>cols.some(c=>c.col!==spec.dateCol && String(r[c.col]??"").trim()!==""))
-    .map(r=>cols.map(c=>r[c.col]??""));
+    .map(r=>(spec.cols||[]).map(c=>r[c.col]??""));
 }
 function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
 function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
