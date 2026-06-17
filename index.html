@@ -328,9 +328,12 @@ function assembleTab(tab,defs){
   const dayMap={};
   defs.forEach(([id])=>{const m=CFG.map[tab+"."+id];if(!m||!m.src||!m.col||!m.dateCol)return;
     const src=SRC[m.src];if(!src)return;
-    src.rows.forEach(row=>{const d=toDate(row[m.dateCol]);if(!d)return;
+    // Resolve the stored column names against the source's current headers, so
+    // a Google Form description tweak doesn't silently zero out a metric.
+    const dateColR=resolveCol(src,m.dateCol),colR=resolveCol(src,m.col);
+    src.rows.forEach(row=>{const d=toDate(row[dateColR]);if(!d)return;
       const k=iso(d);if(!dayMap[k])dayMap[k]={date:new Date(d.getFullYear(),d.getMonth(),d.getDate())};
-      dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[m.col])})});
+      dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[colR])})});
   return Object.values(dayMap).sort((a,b)=>a.date-b.date);
 }
 
@@ -406,9 +409,11 @@ function cTableRows(spec,from,to){
 }
 function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
 function assembleCloses(){const c=CFG.closesSrc||{},src=SRC[c.src];if(!src||!c.dateCol)return [];
-  return src.rows.map(r=>({date:toDate(r[c.dateCol]),name:String(r[c.nameCol]||"").trim(),cashCollected:toNum(r[c.cashCol])})).filter(x=>x.date).sort((a,b)=>b.date-a.date)}
+  const dateColR=resolveCol(src,c.dateCol),nameColR=resolveCol(src,c.nameCol),cashColR=resolveCol(src,c.cashCol);
+  return src.rows.map(r=>({date:toDate(r[dateColR]),name:String(r[nameColR]||"").trim(),cashCollected:toNum(r[cashColR])})).filter(x=>x.date).sort((a,b)=>b.date-a.date)}
 function assemblePlans(){const c=CFG.plansSrc||{},src=SRC[c.src];if(!src)return [];
-  return src.rows.map(r=>({name:String(r[c.nameCol]||"").trim(),dueDate:toDate(r[c.dueCol]),status:String(r[c.statusCol]||"").trim(),amountDue:toNum(r[c.amountCol])}))}
+  const nameColR=resolveCol(src,c.nameCol),dueColR=resolveCol(src,c.dueCol),statusColR=resolveCol(src,c.statusCol),amountColR=resolveCol(src,c.amountCol);
+  return src.rows.map(r=>({name:String(r[nameColR]||"").trim(),dueDate:toDate(r[dueColR]),status:String(r[statusColR]||"").trim(),amountDue:toNum(r[amountColR])}))}
 const hasSources=()=>CFG.sources.some(s=>s.sheetId&&s.tab);
 async function loadData(){
   if(CFG.demo||!hasSources()){const d=genDemo();RAW.ceo=d.daily;RAW.setter=d.daily;RAW.closer=d.daily;RAW.closes=d.closes;RAW.plans=d.plans;setConn("demo");return}
