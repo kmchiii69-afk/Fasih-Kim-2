@@ -57,6 +57,15 @@ async function fathomMeetings(apiKey, email, after, before) {
   return all;
 }
 
+// Approximate FX rates for converting non-USD amounts mentioned in transcripts
+// into USD. Anchored to mid-market rates; bump these here when they drift more
+// than a few percent. The values flow into the RUBRIC string below.
+const CURRENCY_RATES = {
+  GBP: 1.34,   // £ → $
+  EUR: 1.15,   // € → $
+  CAD: 0.73,   // C$ → $
+  AUD: 0.65,   // A$ → $
+};
 const RUBRIC = `You are scoring a sales call for Goh Consulting, a business coaching company.
 Score the LEAD (the prospect, not the closer) on five ICP factors. Max points per factor:
 - Budget: 30  (can they afford the program? revenue/cash on hand)
@@ -67,6 +76,16 @@ Score the LEAD (the prospect, not the closer) on five ICP factors. Max points pe
 
 Then classify call OUTCOME. Valid outcome tags (zero or more): "Offer Pitched", "Closed", "Rescheduled".
 Identify the OFFER if one was pitched: one of "Brand Architect", "Acquisition Mastery", "Advisory Group", or null.
+
+CURRENCY — IMPORTANT. The "cash" and "revenue" fields MUST be returned in USD.
+- If the transcript explicitly mentions amounts in another currency (£, GBP, pounds, €, EUR, euros, C$/CAD, A$/AUD), CONVERT to USD using these rates:
+    GBP → USD × ${CURRENCY_RATES.GBP}
+    EUR → USD × ${CURRENCY_RATES.EUR}
+    CAD → USD × ${CURRENCY_RATES.CAD}
+    AUD → USD × ${CURRENCY_RATES.AUD}
+  Round to the nearest whole dollar. Example: "£5,600" → 5600 × ${CURRENCY_RATES.GBP} = ${Math.round(5600 * CURRENCY_RATES.GBP)}.
+- If the currency is not explicitly mentioned in the transcript, assume USD (do NOT convert).
+- "Cash" is the deposit paid today; "revenue" is the full contract value (which can be higher than cash on a payment plan).
 
 Return ONLY valid JSON, no markdown, no preamble, with this exact shape:
 {
