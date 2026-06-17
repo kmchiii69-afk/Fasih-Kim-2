@@ -295,6 +295,11 @@ function collect(){
 function lock(s){document.body.classList.toggle("locked",s)}
 
 function doSubmit(){
+  // If George typed a name but didn't press Enter / comma / click away, push
+  // it into the array now so it ends up in the submitted payload.
+  const ns=$("nsInput"),cn=$("cnInput");
+  if(ns&&ns._flush)ns._flush();
+  if(cn&&cn._flush)cn._flush();
   const data=collect();
   try{if(window.storage)window.storage.set("eod:"+dateKey,JSON.stringify(data),false)}catch(e){}
   // Push to the EOD Google Sheet so the dashboard sees it live.
@@ -341,8 +346,17 @@ async function loadCalls(){
 async function init(){
   await loadCalls();
   renderCalls();renderAuto();renderChips();renderCancelChips();updateSummary();
-  $("nsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){noShows.push(e.target.value.trim());e.target.value="";syncNoShow()}});
-  $("cnInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){cancelled.push(e.target.value.trim());e.target.value="";syncCancel()}});
+  // Capture pending input as a chip on Enter, comma, OR blur (clicking away).
+  // Whichever the closer reaches for, the name lands in the array.
+  function wireChipInput(inputId, arr, sync){
+    const el=$(inputId);
+    const flush=()=>{const v=(el.value||"").trim();if(!v)return false;arr.push(v);el.value="";sync();return true};
+    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===","){e.preventDefault();flush()}});
+    el.addEventListener("blur",flush);
+    el._flush=flush; // expose so doSubmit can flush trailing text before collecting
+  }
+  wireChipInput("nsInput",noShows,syncNoShow);
+  wireChipInput("cnInput",cancelled,syncCancel);
   $("m_noshow").addEventListener("input",updateSummary);
   $("m_cancel").addEventListener("input",updateSummary);
   $("submitBtn").onclick=()=>{if(!submitted)doSubmit()};
