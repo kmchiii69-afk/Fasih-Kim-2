@@ -403,8 +403,14 @@ function cTableRows(spec,from,to){
   const src=SRC[spec.src];if(!src)return [];
   const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
   const colsR=(spec.cols||[]).map(c=>({...c,_resolved:resolveCol(src,c.col)}));
+  // Opt-in row filter: drop rows where the chosen "must-have" column is blank.
+  // Used by e.g. the no-shows table — every EOD writes a row, but most days
+  // have no no-show names, so filtering keeps the table to the real entries.
+  // Setter widgets etc. leave this unset and see every row in the range.
+  const hideCol=spec.hideEmptyCol?resolveCol(src,spec.hideEmptyCol):null;
   return src.rows
     .filter(r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false})
+    .filter(r=>!hideCol||String(r[hideCol]??"").trim()!=="")
     .map(r=>colsR.map(c=>r[c._resolved]??""));
 }
 function widgetsFor(tab){return (CFG.widgets||[]).filter(w=>w.tab===tab)}
@@ -913,7 +919,8 @@ function openWidgetBuilder(tabId,existing){
     }else{
       dyn.innerHTML=`<label>Source</label>${srcSel()}
         <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
-        <label>Columns to show</label><div id="wb-tblcols"></div><button class="btn" id="wb-addcol">+ Add column</button>`;
+        <label>Columns to show</label><div id="wb-tblcols"></div><button class="btn" id="wb-addcol">+ Add column</button>
+        <label>Hide rows where this column is empty <span class="wb-hint" style="font-weight:400">(optional — useful for tables like "no-shows" where most days are blank)</span></label>${colSelect("wb-hide",w.src,w.hideEmptyCol||"")}`;
       bindTable();
     }
   }
@@ -936,7 +943,7 @@ function openWidgetBuilder(tabId,existing){
       box.querySelectorAll(".wb-rm").forEach(b=>b.onclick=()=>{w.cols.splice(+b.dataset.i,1);if(!w.cols.length)w.cols=[{header:"",col:""}];draw()})};
     draw();
     ov.querySelector("#wb-addcol").onclick=()=>{w.cols.push({header:"",col:""});draw()};
-    if(ss)ss.onchange=()=>{w.src=ss.value;const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));draw()}}
+    if(ss)ss.onchange=()=>{w.src=ss.value;const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));const h=ov.querySelector(".wb-hide");if(h)h.outerHTML=colSelect("wb-hide",w.src,"");draw()}}
   fields();
   ov.querySelector("#wb-type").onchange=fields;
   const closeWb=()=>ov.classList.remove("show");
@@ -949,7 +956,7 @@ function openWidgetBuilder(tabId,existing){
     if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.gold=ov.querySelector("#wb-gold").checked;w.sub=g("#wb-sub").trim();
       w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");}
     else if(w.type==="bar"){w.col=g(".wb-col");}
-    else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;}
+    else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;w.hideEmptyCol=g(".wb-hide")||"";}
     saveWidget(w);closeWb();rerenderTabWidgets(w.tab);}
 }
 async function doSync(){const btn=document.getElementById("syncBtn");btn.classList.add("spin");await loadData();
