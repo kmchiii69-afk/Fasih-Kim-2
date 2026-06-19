@@ -737,7 +737,11 @@ function getBuiltinOverride(tab,key){
 function setBuiltinOverride(tab,key,ovr){
   CFG.builtinOverrides=CFG.builtinOverrides||{};
   CFG.builtinOverrides[tab]=CFG.builtinOverrides[tab]||{};
-  if(!ovr||(ovr.title==null&&ovr.gold==null))delete CFG.builtinOverrides[tab][key];
+  // Keep the override if ANY field has a real value (title, gold, compare, …).
+  // Without this, enabling compare-only would drop into the "empty" branch and
+  // discard the override entirely.
+  const hasContent=ovr&&Object.values(ovr).some(v=>v!=null&&v!==false&&v!=="");
+  if(!hasContent)delete CFG.builtinOverrides[tab][key];
   else CFG.builtinOverrides[tab][key]=ovr;
   saveSharedCfg();
 }
@@ -967,7 +971,15 @@ function moveWidget(orderKey,dir){
 }
 
 /* ===================== WIDGET BUILDER MODAL ===================== */
-function colSelect(cls,sid,sel){const hs=headersOf(sid);return `<select class="${cls}">`+'<option value="">—</option>'+hs.map(h=>`<option ${h===sel?'selected':''}>${esc(h)}</option>`).join("")+`</select>`}
+function colSelect(cls,sid,sel){
+  const hs=headersOf(sid);
+  // Resolve the stored col against the source's CURRENT headers so a stored
+  // prefix like "# of Inbounds" still matches the actual "# of Inbounds\n(Number…)"
+  // entry. Otherwise editing a widget wipes the column on save.
+  const src=SRC[sid];
+  const resolvedSel=(sel&&src)?resolveCol(src,sel):sel;
+  return `<select class="${cls}">`+'<option value="">—</option>'+hs.map(h=>`<option ${h===resolvedSel?'selected':''}>${esc(h)}</option>`).join("")+`</select>`;
+}
 function openWidgetBuilder(tabId,existing){
   const w=existing||{id:"w"+Date.now(),tab:tabId,type:"card",title:"",agg:"sum",fmt:"number"};
   let ov=document.getElementById("wbOverlay");
@@ -1055,7 +1067,13 @@ async function doSync(){const btn=document.getElementById("syncBtn");btn.classLi
 
 /* ---------- Settings ---------- */
 let curTab="ceo";
-const headersOf=id=>{const s=CFG.sources.find(x=>x.id===id);return s?(s.headers||[]):[]};
+const headersOf=id=>{
+  // Prefer LIVE headers from the loaded sheet (SRC) over the stored snapshot
+  // in CFG.sources. Otherwise the dropdown lists stale headers and edits drop
+  // the user's selection on save.
+  if(SRC[id]&&Array.isArray(SRC[id].headers)&&SRC[id].headers.length)return SRC[id].headers;
+  const s=CFG.sources.find(x=>x.id===id);return s?(s.headers||[]):[];
+};
 const isDateCol=h=>/date|day/i.test(h);
 const firstDateCol=id=>headersOf(id).find(isDateCol)||"";
 function srcOpts(sel){return '<option value="">— source —</option>'+CFG.sources.filter(s=>s.name||s.sheetId).map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name||'(unnamed)')}</option>`).join("")}
