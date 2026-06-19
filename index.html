@@ -63,6 +63,24 @@
   .card.gold{border-color:rgba(216,169,79,.3)}
   .card.gold .val{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .card .sub{font-size:10.5px;color:var(--muted2);margin-top:10px;letter-spacing:.3px}
+  .card .delta{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;font-weight:600;letter-spacing:.2px}
+  .card .delta.up{color:#4ade80}
+  .card .delta.down{color:#f87171}
+  .card .delta.flat{color:var(--muted2)}
+  .card .delta .arrow{font-size:10px;line-height:1}
+  .card .delta .since{color:var(--muted2);font-weight:500;margin-left:3px}
+  /* Built-in tile editor — small custom modal so we can mix title + checkbox in one go */
+  .biedit-back{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:100}
+  .biedit-back.open{display:flex}
+  .biedit{background:#14110c;border:1px solid #352a1e;border-radius:14px;padding:22px 24px;max-width:440px;width:92%;box-shadow:0 22px 64px rgba(0,0,0,.55)}
+  .biedit h3{margin:0 0 16px;font-size:14px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold)}
+  .biedit label{display:block;font-size:11px;color:var(--muted);margin:14px 0 6px;letter-spacing:.4px;text-transform:uppercase}
+  .biedit input[type="text"]{width:100%;background:#1c1812;color:var(--txt);border:1px solid #352a1e;border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;box-sizing:border-box}
+  .biedit input[type="text"]:focus{outline:none;border-color:rgba(216,169,79,.55)}
+  .biedit .cb-row{display:flex;align-items:center;gap:9px;margin-top:18px;font-size:13px;color:var(--txt);cursor:pointer}
+  .biedit .cb-row input{cursor:pointer;accent-color:#d8a94f}
+  .biedit .actions{display:flex;gap:8px;margin-top:22px;justify-content:flex-end}
+  .biedit .actions .btn.primary{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
   .tables{display:grid;grid-template-columns:1fr 1fr;gap:18px}
   @media(max-width:980px){.tables{grid-template-columns:1fr}}
   .tbl-card{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow:hidden}
@@ -607,6 +625,45 @@ function fmtBuiltin(value,fmt){
   if(fmt==="count")return Number(value||0).toLocaleString();
   return Number(value||0).toLocaleString("en-US",{maximumFractionDigits:2});
 }
+
+/* ===================== 7-DAY COMPARISON ===================== */
+// Returns the previous-period window: same length as [from,to], shifted back
+// by 7 days. So "this week" compares to last week; "this month" compares to
+// 16-day window ending 7 days before current end.
+function prevPeriod(from,to){
+  const shift=7*86400000;
+  return {from:new Date(from.getTime()-shift), to:new Date(to.getTime()-shift)};
+}
+// HTML snippet for the delta indicator on a card. fmt drives whether we show
+// a relative % change (money/count) or percentage-point delta (percent fmt).
+function renderDelta(curr,prev,fmt){
+  if(curr==null||prev==null||isNaN(curr)||isNaN(prev))return "";
+  if(curr===0&&prev===0)return `<div class="delta flat"><span class="arrow">—</span> no change<span class="since">vs prev 7d</span></div>`;
+  let dir,txt;
+  if(fmt==="percent"){
+    const pp=(curr-prev)*100;
+    dir=pp>0.05?"up":pp<-0.05?"down":"flat";
+    txt=(pp>=0?"+":"")+pp.toFixed(1)+"pp";
+  }else{
+    if(prev===0){
+      dir=curr>0?"up":"flat";
+      txt=curr>0?"new":"—";
+    }else{
+      const pct=((curr-prev)/Math.abs(prev))*100;
+      dir=pct>0.1?"up":pct<-0.1?"down":"flat";
+      txt=(pct>=0?"+":"")+pct.toFixed(1)+"%";
+    }
+  }
+  const arrow=dir==="up"?"▲":dir==="down"?"▼":"—";
+  return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">vs prev 7d</span></div>`;
+}
+// Build a context for a different date range using the same RAW filters.
+function ctxForRange(tab,from,to){
+  return {tab,from,to,goal:toNum(CFG.goal),
+    ceoRows:RAW.ceo.filter(r=>inR(r.date,from,to)),
+    setterRows:RAW.setter.filter(r=>inR(r.date,from,to)),
+    closerRows:RAW.closer.filter(r=>inR(r.date,from,to))};
+}
 // Resolve a "barSetter:<field>" / "barCloser:<field>" compute key.
 function resolveBar(computeKey,ctx){
   const [src,field]=computeKey.split(":");
@@ -702,7 +759,13 @@ function buildPiece(tab,orderKey,ctx){
       const goldOn=ovr.gold!=null?!!ovr.gold:!!r.gold;
       const goldCls=goldOn?" gold":"";
       const sub=r.sub?`<div class="sub">${esc(r.sub)}</div>`:"";
-      return{kind:"card",html:`<div class="card${goldCls} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}</div>`};
+      let delta="";
+      if(ovr.compare){
+        const prev=prevPeriod(ctx.from,ctx.to);
+        const prevR=fn(ctxForRange(parsed.tab,prev.from,prev.to))||{};
+        delta=renderDelta(r.value,prevR.value,r.fmt);
+      }
+      return{kind:"card",html:`<div class="card${goldCls} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}${delta}</div>`};
     }
     if(def.type==="bar"){
       const cid="bi_"+parsed.tab+"_"+parsed.key;
@@ -732,7 +795,13 @@ function buildPiece(tab,orderKey,ctx){
   const ctrl=widgetCtrl(orderKey,false);
   if(w.type==="card"){
     const v=cAgg(w,ctx.from,ctx.to);const sub=w.sub?`<div class="sub">${esc(w.sub)}</div>`:"";
-    return{kind:"card",html:`<div class="${w.gold?'card gold':'card'} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}</div>`};
+    let delta="";
+    if(w.compare){
+      const prev=prevPeriod(ctx.from,ctx.to);
+      const prevV=cAgg(w,prev.from,prev.to);
+      delta=renderDelta(v,prevV,w.fmt);
+    }
+    return{kind:"card",html:`<div class="${w.gold?'card gold':'card'} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}${delta}</div>`};
   }
   if(w.type==="bar"){
     const cid="cw_"+w.id;
@@ -854,14 +923,35 @@ function editBuiltin(orderKey){
   const p=parseKey(orderKey);if(p.kind!=="builtin")return;
   const def=findBuiltinDef(p.tab,p.key);if(!def)return;
   const ovr=getBuiltinOverride(p.tab,p.key);
-  const curTitle=ovr.title!=null?ovr.title:def.title;
-  const newTitle=prompt(`Tile title (blank to reset to "${def.title}"):`,curTitle);
-  if(newTitle===null)return;
-  const t=newTitle.trim();
-  const next={...ovr};
-  if(!t||t===def.title)delete next.title;else next.title=t;
-  setBuiltinOverride(p.tab,p.key,Object.keys(next).length?next:null);
-  renderTab(p.tab);
+  const back=document.getElementById("biEditBack");
+  const titleEl=document.getElementById("biEditTitle");
+  const compareEl=document.getElementById("biEditCompare");
+  const compareRow=document.getElementById("biEditCompareRow");
+  titleEl.value=ovr.title!=null?ovr.title:def.title;
+  titleEl.placeholder=def.title;
+  compareEl.checked=!!ovr.compare;
+  // Comparison only fits on cards. Hide the row for bars and tables.
+  compareRow.style.display=def.type==="card"?"flex":"none";
+  back.classList.add("open");setTimeout(()=>titleEl.focus(),20);
+
+  const close=()=>{back.classList.remove("open");save.onclick=reset.onclick=cancel.onclick=null};
+  const save=document.getElementById("biEditSave");
+  const reset=document.getElementById("biEditReset");
+  const cancel=document.getElementById("biEditCancel");
+  save.onclick=()=>{
+    const t=(titleEl.value||"").trim();
+    const next={...ovr};
+    if(!t||t===def.title)delete next.title;else next.title=t;
+    if(def.type==="card"){if(compareEl.checked)next.compare=true;else delete next.compare}
+    setBuiltinOverride(p.tab,p.key,Object.keys(next).length?next:null);
+    renderTab(p.tab);close();
+  };
+  reset.onclick=()=>{
+    if(!confirm(`Reset "${def.title}" to default? Title and 7-day comparison will be cleared.`))return;
+    setBuiltinOverride(p.tab,p.key,null);renderTab(p.tab);close();
+  };
+  cancel.onclick=close;
+  back.onclick=e=>{if(e.target===back)close()};
 }
 // Move by order-key (works for both built-in and custom widgets).
 function moveWidget(orderKey,dir){
@@ -909,6 +999,7 @@ function openWidgetBuilder(tabId,existing){
         <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
         <label>Format</label><select id="wb-fmt"><option value="number" ${w.fmt==="number"?"selected":""}>Number</option><option value="money" ${w.fmt==="money"?"selected":""}>Money ($)</option><option value="percent" ${w.fmt==="percent"?"selected":""}>Percent (%)</option></select>
         <label class="wb-check"><input type="checkbox" id="wb-gold" ${w.gold?"checked":""}> Gold highlight</label>
+        <label class="wb-check"><input type="checkbox" id="wb-compare" ${w.compare?"checked":""}> Show 7-day comparison arrow (▲ / ▼ vs prev. 7 days)</label>
         <label>Subtitle (optional)</label><input id="wb-sub" value="${esc(w.sub||"")}" placeholder="e.g. closed ÷ taken">`;
       bindCard();
     }else if(type==="bar"){
@@ -953,7 +1044,7 @@ function openWidgetBuilder(tabId,existing){
     w.type=ov.querySelector("#wb-type").value;w.title=ov.querySelector("#wb-title").value.trim()||"Untitled";
     const g=s=>{const el=ov.querySelector(s);return el?el.value:""};
     w.src=g(".wb-src");w.dateCol=g(".wb-date");
-    if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.gold=ov.querySelector("#wb-gold").checked;w.sub=g("#wb-sub").trim();
+    if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.gold=ov.querySelector("#wb-gold").checked;w.compare=ov.querySelector("#wb-compare").checked;w.sub=g("#wb-sub").trim();
       w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");}
     else if(w.type==="bar"){w.col=g(".wb-col");}
     else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;w.hideEmptyCol=g(".wb-hide")||"";}
@@ -1125,5 +1216,21 @@ async function boot(){
 }
 window.addEventListener("load",boot);
 </script>
+<div class="biedit-back" id="biEditBack">
+  <div class="biedit">
+    <h3>Edit Tile</h3>
+    <label for="biEditTitle">Title</label>
+    <input type="text" id="biEditTitle" autocomplete="off">
+    <div class="cb-row" id="biEditCompareRow">
+      <input type="checkbox" id="biEditCompare">
+      <label for="biEditCompare" style="margin:0;text-transform:none;letter-spacing:.2px;color:var(--txt);font-size:13px;cursor:pointer">Show 7-day comparison arrow (▲ / ▼ vs prev. 7 days)</label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="biEditReset">Reset to Default</button>
+      <button class="btn" id="biEditCancel">Cancel</button>
+      <button class="btn primary" id="biEditSave">Save</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
