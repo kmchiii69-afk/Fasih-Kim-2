@@ -626,19 +626,27 @@ function fmtBuiltin(value,fmt){
   return Number(value||0).toLocaleString("en-US",{maximumFractionDigits:2});
 }
 
-/* ===================== 7-DAY COMPARISON ===================== */
-// Returns the previous-period window: same length as [from,to], shifted back
-// by 7 days. So "this week" compares to last week; "this month" compares to
-// 16-day window ending 7 days before current end.
+/* ===================== DYNAMIC COMPARISON ===================== */
+// Returns the previous-period window — same DURATION as [from,to], placed
+// immediately before it. Jun 1-18 (18 days) → May 14-31. Jun 1-7 (7 days)
+// → May 25-31. Single day → previous day. Whatever the user picks in the
+// date filter, the comparison window resizes with it.
 function prevPeriod(from,to){
-  const shift=7*86400000;
-  return {from:new Date(from.getTime()-shift), to:new Date(to.getTime()-shift)};
+  const dur=to.getTime()-from.getTime();
+  return{from:new Date(from.getTime()-dur-1),
+         to:new Date(from.getTime()-1)};
+}
+// Number of days in a window (inclusive of both endpoints). Used in the
+// "vs prev Nd" label so users see what they're being compared against.
+function windowDays(from,to){
+  return Math.max(1,Math.floor((to.getTime()-from.getTime())/86400000)+1);
 }
 // HTML snippet for the delta indicator on a card. fmt drives whether we show
 // a relative % change (money/count) or percentage-point delta (percent fmt).
-function renderDelta(curr,prev,fmt){
+function renderDelta(curr,prev,fmt,days){
   if(curr==null||prev==null||isNaN(curr)||isNaN(prev))return "";
-  if(curr===0&&prev===0)return `<div class="delta flat"><span class="arrow">—</span> no change<span class="since">vs prev 7d</span></div>`;
+  const sinceTxt="vs prev "+(days===1?"day":days+"d");
+  if(curr===0&&prev===0)return `<div class="delta flat"><span class="arrow">—</span> no change<span class="since">${sinceTxt}</span></div>`;
   let dir,txt;
   if(fmt==="percent"){
     const pp=(curr-prev)*100;
@@ -655,7 +663,7 @@ function renderDelta(curr,prev,fmt){
     }
   }
   const arrow=dir==="up"?"▲":dir==="down"?"▼":"—";
-  return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">vs prev 7d</span></div>`;
+  return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">${sinceTxt}</span></div>`;
 }
 // Build a context for a different date range using the same RAW filters.
 function ctxForRange(tab,from,to){
@@ -767,7 +775,7 @@ function buildPiece(tab,orderKey,ctx){
       if(ovr.compare){
         const prev=prevPeriod(ctx.from,ctx.to);
         const prevR=fn(ctxForRange(parsed.tab,prev.from,prev.to))||{};
-        delta=renderDelta(r.value,prevR.value,r.fmt);
+        delta=renderDelta(r.value,prevR.value,r.fmt,windowDays(ctx.from,ctx.to));
       }
       return{kind:"card",html:`<div class="card${goldCls} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}${delta}</div>`};
     }
@@ -803,7 +811,7 @@ function buildPiece(tab,orderKey,ctx){
     if(w.compare){
       const prev=prevPeriod(ctx.from,ctx.to);
       const prevV=cAgg(w,prev.from,prev.to);
-      delta=renderDelta(v,prevV,w.fmt);
+      delta=renderDelta(v,prevV,w.fmt,windowDays(ctx.from,ctx.to));
     }
     return{kind:"card",html:`<div class="${w.gold?'card gold':'card'} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}${delta}</div>`};
   }
@@ -1011,7 +1019,7 @@ function openWidgetBuilder(tabId,existing){
         <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
         <label>Format</label><select id="wb-fmt"><option value="number" ${w.fmt==="number"?"selected":""}>Number</option><option value="money" ${w.fmt==="money"?"selected":""}>Money ($)</option><option value="percent" ${w.fmt==="percent"?"selected":""}>Percent (%)</option></select>
         <label class="wb-check"><input type="checkbox" id="wb-gold" ${w.gold?"checked":""}> Gold highlight</label>
-        <label class="wb-check"><input type="checkbox" id="wb-compare" ${w.compare?"checked":""}> Show 7-day comparison arrow (▲ / ▼ vs prev. 7 days)</label>
+        <label class="wb-check"><input type="checkbox" id="wb-compare" ${w.compare?"checked":""}> Show comparison arrow (▲ / ▼ vs same-length previous period)</label>
         <label>Subtitle (optional)</label><input id="wb-sub" value="${esc(w.sub||"")}" placeholder="e.g. closed ÷ taken">`;
       bindCard();
     }else if(type==="bar"){
@@ -1241,7 +1249,7 @@ window.addEventListener("load",boot);
     <input type="text" id="biEditTitle" autocomplete="off">
     <div class="cb-row" id="biEditCompareRow">
       <input type="checkbox" id="biEditCompare">
-      <label for="biEditCompare" style="margin:0;text-transform:none;letter-spacing:.2px;color:var(--txt);font-size:13px;cursor:pointer">Show 7-day comparison arrow (▲ / ▼ vs prev. 7 days)</label>
+      <label for="biEditCompare" style="margin:0;text-transform:none;letter-spacing:.2px;color:var(--txt);font-size:13px;cursor:pointer">Show comparison arrow (▲ / ▼ vs same-length previous period)</label>
     </div>
     <div class="actions">
       <button class="btn" id="biEditReset">Reset to Default</button>
