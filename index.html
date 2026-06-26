@@ -696,11 +696,25 @@ function findNameCol(tab){
   return null;
 }
 // Unique non-empty values from the name column, sorted alphabetically.
-function getFilterOptions(tab){
+// Scoped to the current date range so old setters who haven't submitted
+// recently fall off the list. Reads the same dateCol that drives metric
+// aggregation so the names you see match the data the dashboard is showing.
+function getFilterOptions(tab,from,to){
   const nc=findNameCol(tab);if(!nc)return [];
   const src=SRC[nc.src];if(!src)return [];
+  // Find the date column on this source via any setter metric mapping.
+  let dateCol=null;
+  const defs=TABMETRICS[tab]||[];
+  for(const [id] of defs){
+    const m=CFG.map[tab+"."+id];
+    if(m&&m.src===nc.src&&m.dateCol){dateCol=resolveCol(src,m.dateCol);break}
+  }
   const set=new Set();
-  src.rows.forEach(r=>{const v=String(r[nc.col]??"").trim();if(v)set.add(v)});
+  src.rows.forEach(r=>{
+    if(dateCol&&from&&to){const d=toDate(r[dateCol]);if(!d||!inR(d,from,to))return}
+    const v=String(r[nc.col]??"").trim();
+    if(v)set.add(v);
+  });
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
 // Returns {value, rowFilter} for the active filter on this tab, or null.
@@ -912,7 +926,7 @@ function renderTab(tab){
   const subEl=page.querySelector(".subline, .sub");
   if(subEl)subEl.innerHTML=subHtml(from,to);
   ensureOrder(tab);
-  renderTabFilter(tab);
+  renderTabFilter(tab,from,to);
   // Use ctxForRange so any active filter (e.g. setter name) feeds built-in
   // computes through filtered RAW. Then attach the rowFilter for custom widgets.
   const ctx=ctxForRange(tab,from,to);
@@ -939,16 +953,25 @@ function rerenderTabWidgets(tabId){renderTab(tabId)}
 function fullRender(){["ceo","setter","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
 
 // Renders the per-tab filter dropdown (currently only on the setter tab).
-// Reads options live from the source so adding a new setter to the form
-// shows up automatically.
-function renderTabFilter(tab){
+// Options are scoped to the active date range — change the range and the
+// dropdown reflects who submitted in that window.
+function renderTabFilter(tab,from,to){
   if(tab!=="setter")return;
   const host=document.getElementById("setterFilterHost");if(!host)return;
-  const opts=getFilterOptions(tab);
-  if(!opts.length){host.innerHTML="";return}
+  const opts=getFilterOptions(tab,from,to);
   const current=(getTabFilter(tab)||{}).value||"";
+  if(!opts.length){
+    // No setters in range at all. Keep the host visible but make it informative.
+    host.innerHTML=`<label>Setter</label><span style="color:var(--muted2);font-size:12px">no submissions in this range</span>`;
+    return;
+  }
+  // If the currently selected setter didn't submit in this range, surface it as
+  // a "(not in range)" option so the user still sees their selection and can
+  // either widen the range or pick a different setter.
+  const showStale=current&&!opts.includes(current);
   const optHtml=`<option value="">All setters</option>`+
-    opts.map(n=>`<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join("");
+    opts.map(n=>`<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join("")+
+    (showStale?`<option value="${esc(current)}" selected>${esc(current)} (no submissions in range)</option>`:"");
   host.innerHTML=`<label>Setter</label><select id="setterFilterSel" class="${current?'active':''}">${optHtml}</select>`;
   document.getElementById("setterFilterSel").onchange=e=>{
     setTabFilter("setter",e.target.value);
