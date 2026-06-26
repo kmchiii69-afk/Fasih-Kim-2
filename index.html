@@ -145,6 +145,12 @@ body.editing .widget:hover{outline-color:rgba(216,169,79,.35)}
 #modeBtn.on{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
 .edit-only{display:none}
 body.editing .edit-only{display:inline-flex}
+/* Tab filter dropdown (e.g. setter name filter) */
+.tab-filter{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.tab-filter label{text-transform:uppercase;letter-spacing:.5px;font-size:10.5px;color:var(--muted2)}
+.tab-filter select{background:#1c1812;color:var(--txt);border:1px solid #352a1e;border-radius:7px;padding:7px 11px;font-size:13px;font-family:inherit;cursor:pointer;min-width:170px}
+.tab-filter select:focus{outline:none;border-color:rgba(216,169,79,.55)}
+.tab-filter select.active{border-color:rgba(216,169,79,.6);color:var(--gold-lite);font-weight:600}
 .wbtn{width:22px;height:22px;border-radius:6px;border:1px solid var(--line-str);background:rgba(20,17,11,.92);color:var(--txt);cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
 .wbtn:hover{border-color:var(--gold);color:var(--gold)}.wbtn.del:hover{border-color:#c0492f;color:#e06a4f}
 .empty-tab{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--line-str);border-radius:14px}
@@ -205,7 +211,7 @@ body.editing .edit-only{display:inline-flex}
   <div class="page" id="page-setter">
     <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
     <div class="phead" style="margin:32px 0 18px">
-      <div style="flex:1"></div>
+      <div style="flex:1" class="tab-filter" id="setterFilterHost"></div>
       <div class="phead-actions"><button class="btn" data-addwidget="setter">+ Add Widget</button><button class="btn edit-only" data-reset="setter">Reset Layout</button></div></div>
     <div class="customHost" data-tab="setter"></div>
   </div>
@@ -342,16 +348,23 @@ function genDemo(){
   return{daily,closes,plans};
 }
 
-function assembleTab(tab,defs){
+function assembleTab(tab,defs,rowFilter){
   const dayMap={};
   defs.forEach(([id])=>{const m=CFG.map[tab+"."+id];if(!m||!m.src||!m.col||!m.dateCol)return;
     const src=SRC[m.src];if(!src)return;
     // Resolve the stored column names against the source's current headers, so
     // a Google Form description tweak doesn't silently zero out a metric.
     const dateColR=resolveCol(src,m.dateCol),colR=resolveCol(src,m.col);
-    src.rows.forEach(row=>{const d=toDate(row[dateColR]);if(!d)return;
+    src.rows.forEach(row=>{
+      // Optional row filter (e.g. "only Soo Wei's submissions"). Filter is
+      // told the source id so it can decide whether it applies — widgets pulling
+      // from another sheet on the same tab should pass through unfiltered.
+      if(rowFilter&&!rowFilter(row,m.src))return;
+      const d=toDate(row[dateColR]);if(!d)return;
       const k=iso(d);if(!dayMap[k])dayMap[k]={date:new Date(d.getFullYear(),d.getMonth(),d.getDate())};
-      dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[colR])})});
+      dayMap[k][id]=(dayMap[k][id]||0)+toNum(row[colR]);
+    });
+  });
   return Object.values(dayMap).sort((a,b)=>a.date-b.date);
 }
 
@@ -388,13 +401,14 @@ function clearColCache() { _colCache.clear(); }
 // Read a cell using the resolved column name.
 function getCell(src, row, want) { return row[resolveCol(src, want)]; }
 
-function cAgg(spec,from,to){
+function cAgg(spec,from,to,rowFilter){
   const src=SRC[spec.src];if(!src)return null;
   const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
   const colR=spec.col?resolveCol(src,spec.col):null;
   const col2R=spec.col2?resolveCol(src,spec.col2):null;
   const inRange=r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false};
-  const rows=src.rows.filter(inRange);
+  const passes=r=>(!rowFilter||rowFilter(r,spec.src))&&inRange(r);
+  const rows=src.rows.filter(passes);
   const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
   const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
   if(spec.agg==="count")return cntCol(colR||dateColR||Object.keys(src.rows[0]||{})[0]);
@@ -409,24 +423,24 @@ function cFmt(v,fmt){if(v==null||isNaN(v))return "—";
   if(fmt==="percent")return fmtPct(v);
   return Number(v).toLocaleString("en-US",{maximumFractionDigits:2})}
 // Daily series for a custom bar chart, respecting the date range.
-function cSeries(spec,from,to){
+function cSeries(spec,from,to,rowFilter){
   const src=SRC[spec.src];if(!src||!spec.dateCol)return [];
   const dateColR=resolveCol(src,spec.dateCol),colR=resolveCol(src,spec.col);
   const map={};
-  src.rows.forEach(r=>{const d=toDate(r[dateColR]);if(!d||!inR(d,from,to))return;
-    const k=iso(d);map[k]=(map[k]||0)+toNum(r[colR])});
+  src.rows.forEach(r=>{
+    if(rowFilter&&!rowFilter(r,spec.src))return;
+    const d=toDate(r[dateColR]);if(!d||!inR(d,from,to))return;
+    const k=iso(d);map[k]=(map[k]||0)+toNum(r[colR]);
+  });
   return Object.entries(map).map(([k,v])=>({date:new Date(k),v})).sort((a,b)=>a.date-b.date);
 }
-function cTableRows(spec,from,to){
+function cTableRows(spec,from,to,rowFilter){
   const src=SRC[spec.src];if(!src)return [];
   const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
   const colsR=(spec.cols||[]).map(c=>({...c,_resolved:resolveCol(src,c.col)}));
-  // Opt-in row filter: drop rows where the chosen "must-have" column is blank.
-  // Used by e.g. the no-shows table — every EOD writes a row, but most days
-  // have no no-show names, so filtering keeps the table to the real entries.
-  // Setter widgets etc. leave this unset and see every row in the range.
   const hideCol=spec.hideEmptyCol?resolveCol(src,spec.hideEmptyCol):null;
   return src.rows
+    .filter(r=>!rowFilter||rowFilter(r,spec.src))
     .filter(r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false})
     .filter(r=>!hideCol||String(r[hideCol]??"").trim()!=="")
     .map(r=>colsR.map(c=>r[c._resolved]??""));
@@ -449,6 +463,7 @@ async function loadData(){
       catch(e){SRC[s.id]={_id:s.id,rows:[],headers:s.headers||[]}}
     }));
     RAW.ceo=assembleTab("ceo",M_CEO);RAW.setter=assembleTab("setter",M_SETTER);RAW.closer=assembleTab("closer",M_CLOSER);
+    _filteredRawCache={};
     RAW.closes=assembleCloses();RAW.plans=assemblePlans();setConn("live");
   }catch(e){console.error(e);setConn("err")}
 }
@@ -666,10 +681,67 @@ function renderDelta(curr,prev,fmt,days){
   return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">${sinceTxt}</span></div>`;
 }
 // Build a context for a different date range using the same RAW filters.
+/* ===================== TAB FILTER (e.g. by setter name) ===================== */
+// Locate the "name" column on a tab's source. We use any mapped metric's source
+// (they all share one) and find a header that looks like a person-name field.
+function findNameCol(tab){
+  const defs=TABMETRICS[tab]||[];
+  for(const [id] of defs){
+    const m=CFG.map[tab+"."+id];
+    if(m&&m.src&&SRC[m.src]){
+      const col=SRC[m.src].headers.find(h=>/what'?s your name|^name$|setter name|your name/i.test(h));
+      if(col)return{src:m.src,col};
+    }
+  }
+  return null;
+}
+// Unique non-empty values from the name column, sorted alphabetically.
+function getFilterOptions(tab){
+  const nc=findNameCol(tab);if(!nc)return [];
+  const src=SRC[nc.src];if(!src)return [];
+  const set=new Set();
+  src.rows.forEach(r=>{const v=String(r[nc.col]??"").trim();if(v)set.add(v)});
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+// Returns {value, rowFilter} for the active filter on this tab, or null.
+// rowFilter takes (row, srcId) — passes through any row from a source other
+// than the configured name source, so widgets pulling from another sheet are
+// unaffected.
+function getTabFilter(tab){
+  if(tab!=="setter")return null;
+  let value="";try{value=localStorage.getItem("kpi_filter_"+tab)||""}catch(e){}
+  value=(value||"").trim();if(!value)return null;
+  const nc=findNameCol(tab);if(!nc)return null;
+  return{
+    value,col:nc.col,src:nc.src,
+    rowFilter:(row,srcId)=>srcId!==nc.src||String(row[nc.col]??"").trim()===value
+  };
+}
+function setTabFilter(tab,value){
+  try{localStorage.setItem("kpi_filter_"+tab,value||"")}catch(e){}
+  _filteredRawCache={};  // bust cache so the next render rebuilds with new filter
+}
+// Cached re-assembly of a tab's filtered RAW. Cleared on loadData() and filter
+// changes; otherwise reused so the comparison feature doesn't re-aggregate twice.
+let _filteredRawCache={};
+function getFilteredRaw(tab){
+  const filter=getTabFilter(tab);if(!filter)return RAW[tab];
+  const key=tab+"|"+filter.value;
+  if(_filteredRawCache[key])return _filteredRawCache[key];
+  const defs=TABMETRICS[tab];if(!defs)return RAW[tab];
+  const data=assembleTab(tab,defs,filter.rowFilter);
+  _filteredRawCache[key]=data;
+  return data;
+}
+
 function ctxForRange(tab,from,to){
+  // For the setter tab (or any future filtered tab), use the filtered RAW
+  // when a filter is active. CEO Setter Commission and other cross-tab pulls
+  // continue reading the unfiltered RAW.setter, so they aggregate every setter.
+  const setterSrc=(tab==="setter")?getFilteredRaw("setter"):RAW.setter;
   return {tab,from,to,goal:toNum(CFG.goal),
     ceoRows:RAW.ceo.filter(r=>inR(r.date,from,to)),
-    setterRows:RAW.setter.filter(r=>inR(r.date,from,to)),
+    setterRows:setterSrc.filter(r=>inR(r.date,from,to)),
     closerRows:RAW.closer.filter(r=>inR(r.date,from,to))};
 }
 // Resolve a "barSetter:<field>" / "barCloser:<field>" compute key.
@@ -806,11 +878,11 @@ function buildPiece(tab,orderKey,ctx){
   const w=(CFG.widgets||[]).find(x=>x.id===parsed.id&&x.tab===tab);if(!w)return null;
   const ctrl=widgetCtrl(orderKey,false);
   if(w.type==="card"){
-    const v=cAgg(w,ctx.from,ctx.to);const sub=w.sub?`<div class="sub">${esc(w.sub)}</div>`:"";
+    const v=cAgg(w,ctx.from,ctx.to,ctx.rowFilter);const sub=w.sub?`<div class="sub">${esc(w.sub)}</div>`:"";
     let delta="";
     if(w.compare){
       const prev=prevPeriod(ctx.from,ctx.to);
-      const prevV=cAgg(w,prev.from,prev.to);
+      const prevV=cAgg(w,prev.from,prev.to,ctx.rowFilter);
       delta=renderDelta(v,prevV,w.fmt,windowDays(ctx.from,ctx.to));
     }
     return{kind:"card",html:`<div class="${w.gold?'card gold':'card'} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}${delta}</div>`};
@@ -819,10 +891,10 @@ function buildPiece(tab,orderKey,ctx){
     const cid="cw_"+w.id;
     return{kind:"bar",
       html:`<div class="chart-card widget" data-key="${esc(orderKey)}">${ctrl}<h4>${esc(w.title)}</h4><div class="chart-box"><canvas id="${cid}"></canvas></div></div>`,
-      after:()=>renderCustomBar(cid,cSeries(w,ctx.from,ctx.to),w.fmt)};
+      after:()=>renderCustomBar(cid,cSeries(w,ctx.from,ctx.to,ctx.rowFilter),w.fmt)};
   }
   if(w.type==="table"){
-    const rows=cTableRows(w,ctx.from,ctx.to),cols=w.cols||[];
+    const rows=cTableRows(w,ctx.from,ctx.to,ctx.rowFilter),cols=w.cols||[];
     const head=cols.map(c=>`<th>${esc(c.header||c.col)}</th>`).join("");
     const body=rows.length?rows.slice(0,300).map(r=>`<tr>${r.map(cell=>`<td>${esc(String(cell))}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${cols.length||1}" class="empty">No rows in this range</td></tr>`;
     return{kind:"full",html:`<div class="tbl-card widget" data-key="${esc(orderKey)}">${ctrl}<div class="tbl-bar"><span class="t">${esc(w.title)}</span><span class="c">${rows.length} in range</span></div><div class="tbl-scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`};
@@ -840,10 +912,12 @@ function renderTab(tab){
   const subEl=page.querySelector(".subline, .sub");
   if(subEl)subEl.innerHTML=subHtml(from,to);
   ensureOrder(tab);
-  const ctx={tab,from,to,goal:toNum(CFG.goal),
-    ceoRows:RAW.ceo.filter(r=>inR(r.date,from,to)),
-    setterRows:RAW.setter.filter(r=>inR(r.date,from,to)),
-    closerRows:RAW.closer.filter(r=>inR(r.date,from,to))};
+  renderTabFilter(tab);
+  // Use ctxForRange so any active filter (e.g. setter name) feeds built-in
+  // computes through filtered RAW. Then attach the rowFilter for custom widgets.
+  const ctx=ctxForRange(tab,from,to);
+  const filter=getTabFilter(tab);
+  if(filter)ctx.rowFilter=filter.rowFilter;
   const order=CFG.order[tab]||[];
   const pieces=order.map(k=>buildPiece(tab,k,ctx)).filter(Boolean);
   let html="",i=0;
@@ -863,6 +937,24 @@ function renderTab(tab){
 function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheets"}else if(t==="err"){STATUS.type="err";STATUS.text="Fetch failed"}else{STATUS.type="demo";STATUS.text="Demo data"}}
 function rerenderTabWidgets(tabId){renderTab(tabId)}
 function fullRender(){["ceo","setter","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
+
+// Renders the per-tab filter dropdown (currently only on the setter tab).
+// Reads options live from the source so adding a new setter to the form
+// shows up automatically.
+function renderTabFilter(tab){
+  if(tab!=="setter")return;
+  const host=document.getElementById("setterFilterHost");if(!host)return;
+  const opts=getFilterOptions(tab);
+  if(!opts.length){host.innerHTML="";return}
+  const current=(getTabFilter(tab)||{}).value||"";
+  const optHtml=`<option value="">All setters</option>`+
+    opts.map(n=>`<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join("");
+  host.innerHTML=`<label>Setter</label><select id="setterFilterSel" class="${current?'active':''}">${optHtml}</select>`;
+  document.getElementById("setterFilterSel").onchange=e=>{
+    setTabFilter("setter",e.target.value);
+    renderTab("setter");
+  };
+}
 
 /* ===================== CUSTOM TAB MANAGEMENT ===================== */
 function syncCustomTabsUI(){
@@ -1166,8 +1258,10 @@ function renderTables(){
     <div class="maprow" style="border:none;padding-top:0"><div class="mr"><select class="pl-src" style="flex:1">${srcOpts(p.src)}</select></div></div>
     ${tblPick("Client / name column","pl-name",p.src,p.nameCol,false)}${tblPick("Due date column","pl-due",p.src,p.dueCol,true)}${tblPick("Status column","pl-status",p.src,p.statusCol,false)}${tblPick("Amount column","pl-amount",p.src,p.amountCol,false)}`;
   const cs=document.querySelector(".cl-src"),ps=document.querySelector(".pl-src");
-  if(cs)cs.onchange=()=>{CFG.closesSrc.src=cs.value;renderTables()};
-  if(ps)ps.onchange=()=>{CFG.plansSrc.src=ps.value;renderTables()};
+  // Before destroying and rebuilding inputs, capture whatever the user has
+  // typed but not yet saved. Otherwise switching source nukes their pick.
+  if(cs)cs.onchange=()=>{captureTab("tables");CFG.closesSrc.src=cs.value;renderTables()};
+  if(ps)ps.onchange=()=>{captureTab("tables");CFG.plansSrc.src=ps.value;renderTables()};
 }
 function captureTab(tab){
   if(tab==="tables"){const g=q=>{const e=document.querySelector(q);return e?e.value:""};
