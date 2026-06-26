@@ -204,7 +204,7 @@ body.editing .edit-only{display:inline-flex}
   <div class="page active" id="page-ceo">
     <div class="hero"><h1>CEO <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
     <div class="phead" style="margin:32px 0 18px">
-      <div style="flex:1"></div>
+      <div style="flex:1" class="tab-filter" id="ceoFilterHost"></div>
       <div class="phead-actions"><button class="btn" data-addwidget="ceo">+ Add Widget</button><button class="btn edit-only" data-reset="ceo">Reset Layout</button></div></div>
     <div class="customHost" data-tab="ceo"></div>
   </div>
@@ -681,28 +681,32 @@ function renderDelta(curr,prev,fmt,days){
   return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">${sinceTxt}</span></div>`;
 }
 // Build a context for a different date range using the same RAW filters.
-/* ===================== TAB FILTER (e.g. by setter name) ===================== */
-// Locate the "name" column on a tab's source. We use any mapped metric's source
-// (they all share one) and find a header that looks like a person-name field.
+/* ===================== TAB FILTER (by setter/closer name) ===================== */
+// Per-tab label shown next to the dropdown. Drives UI text only.
+const TAB_FILTER_LABEL={setter:"Setter",ceo:"Closer",closer:"Closer"};
+// Locate the "name" column on a tab's source. Uses any mapped metric's source
+// and finds a header that looks like a person-name field. Matches the common
+// patterns we've seen across the team's forms: "What's your name?", "Closer",
+// "Setter", "Name", "Submitted By", etc.
 function findNameCol(tab){
   const defs=TABMETRICS[tab]||[];
+  const NAME_RX=/^(closer|setter|name|submitted by)$|what'?s your name|your name|setter name|closer name/i;
   for(const [id] of defs){
     const m=CFG.map[tab+"."+id];
     if(m&&m.src&&SRC[m.src]){
-      const col=SRC[m.src].headers.find(h=>/what'?s your name|^name$|setter name|your name/i.test(h));
+      const col=SRC[m.src].headers.find(h=>NAME_RX.test(h));
       if(col)return{src:m.src,col};
     }
   }
   return null;
 }
 // Unique non-empty values from the name column, sorted alphabetically.
-// Scoped to the current date range so old setters who haven't submitted
+// Scoped to the current date range so old setters/closers who haven't submitted
 // recently fall off the list. Reads the same dateCol that drives metric
 // aggregation so the names you see match the data the dashboard is showing.
 function getFilterOptions(tab,from,to){
   const nc=findNameCol(tab);if(!nc)return [];
   const src=SRC[nc.src];if(!src)return [];
-  // Find the date column on this source via any setter metric mapping.
   let dateCol=null;
   const defs=TABMETRICS[tab]||[];
   for(const [id] of defs){
@@ -718,11 +722,8 @@ function getFilterOptions(tab,from,to){
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
 // Returns {value, rowFilter} for the active filter on this tab, or null.
-// rowFilter takes (row, srcId) — passes through any row from a source other
-// than the configured name source, so widgets pulling from another sheet are
-// unaffected.
 function getTabFilter(tab){
-  if(tab!=="setter")return null;
+  if(!TAB_FILTER_LABEL[tab])return null;
   let value="";try{value=localStorage.getItem("kpi_filter_"+tab)||""}catch(e){}
   value=(value||"").trim();if(!value)return null;
   const nc=findNameCol(tab);if(!nc)return null;
@@ -733,10 +734,8 @@ function getTabFilter(tab){
 }
 function setTabFilter(tab,value){
   try{localStorage.setItem("kpi_filter_"+tab,value||"")}catch(e){}
-  _filteredRawCache={};  // bust cache so the next render rebuilds with new filter
+  _filteredRawCache={};
 }
-// Cached re-assembly of a tab's filtered RAW. Cleared on loadData() and filter
-// changes; otherwise reused so the comparison feature doesn't re-aggregate twice.
 let _filteredRawCache={};
 function getFilteredRaw(tab){
   const filter=getTabFilter(tab);if(!filter)return RAW[tab];
@@ -749,14 +748,17 @@ function getFilteredRaw(tab){
 }
 
 function ctxForRange(tab,from,to){
-  // For the setter tab (or any future filtered tab), use the filtered RAW
-  // when a filter is active. CEO Setter Commission and other cross-tab pulls
-  // continue reading the unfiltered RAW.setter, so they aggregate every setter.
+  // For any tab with an active filter, feed built-in computes filtered RAW.
+  // Cross-tab pulls (e.g. CEO's Setter Commission reads RAW.setter directly,
+  // not c.setterRows) continue using the unfiltered data, so they stay
+  // team-wide regardless of which closer is selected on the CEO tab.
+  const ceoSrc=(tab==="ceo")?getFilteredRaw("ceo"):RAW.ceo;
   const setterSrc=(tab==="setter")?getFilteredRaw("setter"):RAW.setter;
+  const closerSrc=(tab==="closer")?getFilteredRaw("closer"):RAW.closer;
   return {tab,from,to,goal:toNum(CFG.goal),
-    ceoRows:RAW.ceo.filter(r=>inR(r.date,from,to)),
+    ceoRows:ceoSrc.filter(r=>inR(r.date,from,to)),
     setterRows:setterSrc.filter(r=>inR(r.date,from,to)),
-    closerRows:RAW.closer.filter(r=>inR(r.date,from,to))};
+    closerRows:closerSrc.filter(r=>inR(r.date,from,to))};
 }
 // Resolve a "barSetter:<field>" / "barCloser:<field>" compute key.
 function resolveBar(computeKey,ctx){
@@ -952,30 +954,25 @@ function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheet
 function rerenderTabWidgets(tabId){renderTab(tabId)}
 function fullRender(){["ceo","setter","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
 
-// Renders the per-tab filter dropdown (currently only on the setter tab).
-// Options are scoped to the active date range — change the range and the
-// dropdown reflects who submitted in that window.
+// Renders the per-tab filter dropdown. Picks the right host element + label
+// based on the tab. Tabs without an entry in TAB_FILTER_LABEL get no dropdown.
 function renderTabFilter(tab,from,to){
-  if(tab!=="setter")return;
-  const host=document.getElementById("setterFilterHost");if(!host)return;
+  const label=TAB_FILTER_LABEL[tab];if(!label)return;
+  const host=document.getElementById(tab+"FilterHost");if(!host)return;
   const opts=getFilterOptions(tab,from,to);
   const current=(getTabFilter(tab)||{}).value||"";
   if(!opts.length){
-    // No setters in range at all. Keep the host visible but make it informative.
-    host.innerHTML=`<label>Setter</label><span style="color:var(--muted2);font-size:12px">no submissions in this range</span>`;
+    host.innerHTML=`<label>${esc(label)}</label><span style="color:var(--muted2);font-size:12px">no submissions in this range</span>`;
     return;
   }
-  // If the currently selected setter didn't submit in this range, surface it as
-  // a "(not in range)" option so the user still sees their selection and can
-  // either widen the range or pick a different setter.
   const showStale=current&&!opts.includes(current);
-  const optHtml=`<option value="">All setters</option>`+
+  const optHtml=`<option value="">All ${esc(label.toLowerCase())}s</option>`+
     opts.map(n=>`<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join("")+
     (showStale?`<option value="${esc(current)}" selected>${esc(current)} (no submissions in range)</option>`:"");
-  host.innerHTML=`<label>Setter</label><select id="setterFilterSel" class="${current?'active':''}">${optHtml}</select>`;
-  document.getElementById("setterFilterSel").onchange=e=>{
-    setTabFilter("setter",e.target.value);
-    renderTab("setter");
+  host.innerHTML=`<label>${esc(label)}</label><select id="${tab}FilterSel" class="${current?'active':''}">${optHtml}</select>`;
+  document.getElementById(tab+"FilterSel").onchange=e=>{
+    setTabFilter(tab,e.target.value);
+    renderTab(tab);
   };
 }
 
