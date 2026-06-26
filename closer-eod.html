@@ -27,6 +27,8 @@
   .subline .dia{color:var(--gold);font-size:9px}
   .date-edit{position:relative;display:inline-block;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s}
   .date-edit:hover{color:var(--gold)}
+  .date-edit-icon{font-size:11px;color:var(--gold);margin-left:2px;opacity:.8}
+  .date-edit:hover .date-edit-icon{opacity:1}
   .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;color-scheme:dark}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
@@ -119,7 +121,7 @@
 
   <div class="hero">
     <h1>End of Day <span class="gold">Report</span></h1>
-    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span class="date-edit" title="Click to change submission date"><span id="dateText"></span><input type="date" id="dateInput"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
+    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span class="date-edit" title="Click to change submission date"><span id="dateText"></span> <span class="date-edit-icon">✎</span><input type="date" id="dateInput"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
     <div class="divider"></div>
   </div>
 
@@ -194,6 +196,16 @@ $("dateText").textContent=dateLbl;
 $("dateInput").value=dateKey;
 $("dateInput").max=new Date().toISOString().slice(0,10); // no future-dating
 $("dateInput").addEventListener("change",e=>setDate(e.target.value));
+// Native date inputs only open the picker from the calendar-icon hit area on
+// the right. Force it to open from ANY click on the wrapping pill so the user
+// doesn't have to aim at a 12-pixel target.
+document.querySelector(".date-edit").addEventListener("click",e=>{
+  if(e.target.id==="dateInput")return; // input's own click already opens it
+  e.preventDefault();
+  const inp=$("dateInput");
+  if(inp.showPicker){try{inp.showPicker()}catch(_){inp.focus()}}
+  else inp.focus();
+});
 
 function hasContent(){
   // Anything filled? Any auto field non-zero, any chip, or m_cancel/m_noshow > 0.
