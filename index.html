@@ -60,8 +60,11 @@
   .card:hover{border-color:rgba(216,169,79,.3)}
   .card .lbl{font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:15px;line-height:1.4;min-height:29px}
   .card .val{font-size:29px;font-weight:700;letter-spacing:.2px;line-height:1;color:var(--txt)}
-  .card.gold{border-color:rgba(216,169,79,.3)}
-  .card.gold .val{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  /* Subtle trend tinting — applied when the comparison feature is enabled and
+     the value moved up (green) or down (red) vs. the previous period. The
+     tint is on the number itself, separate from the delta arrow below. */
+  .card .val.val-up{color:#86efac}
+  .card .val.val-down{color:#fca5a5}
   .card .sub{font-size:10.5px;color:var(--muted2);margin-top:10px;letter-spacing:.3px}
   .card .delta{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;font-weight:600;letter-spacing:.2px}
   .card .delta.up{color:#4ade80}
@@ -412,16 +415,20 @@ function cAgg(spec,from,to,rowFilter){
   const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
   const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
   if(spec.agg==="count")return cntCol(colR||dateColR||Object.keys(src.rows[0]||{})[0]);
-  if(spec.agg==="avg"){const n=cntCol(colR);return n?sumCol(colR)/n:0}
+  if(spec.agg==="avg"){
+    // Daily average across the calendar window — sum / number of days in range.
+    // (Previously this was sum / non-empty-rows which was confusing for KPIs;
+    // e.g. "average follow-ups per day" should include weekends as zeros.)
+    const days=Math.max(1,Math.floor((to.getTime()-from.getTime())/86400000)+1);
+    return sumCol(colR)/days;
+  }
+  if(spec.agg==="avgPer"){const n=cntCol(colR);return n?sumCol(colR)/n:0} // legacy per-row average
   if(spec.agg==="ratio"){const b=sumCol(col2R);return b?sumCol(colR)/b:0}
   if(spec.agg==="math"){const A=sumCol(colR),B=col2R?sumCol(col2R):0;
     try{return Function("A","B","return ("+(spec.expr||"A")+")")(A,B)}catch(e){return 0}}
   return sumCol(colR); // default sum
 }
-function cFmt(v,fmt){if(v==null||isNaN(v))return "—";
-  if(fmt==="money")return fmtMoney(Math.round(v));
-  if(fmt==="percent")return fmtPct(v);
-  return Number(v).toLocaleString("en-US",{maximumFractionDigits:2})}
+function cFmt(v,fmt){return fmtValue(v,fmt,false)}
 // Daily series for a custom bar chart, respecting the date range.
 function cSeries(spec,from,to,rowFilter){
   const src=SRC[spec.src];if(!src||!spec.dateCol)return [];
@@ -633,13 +640,6 @@ const BUILTIN_COMPUTE={
   closerCash:         c=>({value:sum(c.closerRows,"closerCash"),fmt:"money",gold:true}),
   closerRevenue:      c=>({value:sum(c.closerRows,"revenue"),fmt:"money",gold:true}),
 };
-// Format a built-in card value — matches the legacy renderer exactly.
-function fmtBuiltin(value,fmt){
-  if(fmt==="money")return fmtMoney(value||0);
-  if(fmt==="percent")return fmtPct(value||0);
-  if(fmt==="count")return Number(value||0).toLocaleString();
-  return Number(value||0).toLocaleString("en-US",{maximumFractionDigits:2});
-}
 
 /* ===================== DYNAMIC COMPARISON ===================== */
 // Returns the previous-period window — same DURATION as [from,to], placed
@@ -656,12 +656,13 @@ function prevPeriod(from,to){
 function windowDays(from,to){
   return Math.max(1,Math.floor((to.getTime()-from.getTime())/86400000)+1);
 }
-// HTML snippet for the delta indicator on a card. fmt drives whether we show
-// a relative % change (money/count) or percentage-point delta (percent fmt).
+// HTML snippet + value-tint class for the delta indicator on a card.
+// Returns { html, valClass } — valClass goes on the .val element so the
+// number itself takes on a slight green/red tint matching the trend.
 function renderDelta(curr,prev,fmt,days){
-  if(curr==null||prev==null||isNaN(curr)||isNaN(prev))return "";
+  if(curr==null||prev==null||isNaN(curr)||isNaN(prev))return{html:"",valClass:""};
   const sinceTxt="vs prev "+(days===1?"day":days+"d");
-  if(curr===0&&prev===0)return `<div class="delta flat"><span class="arrow">—</span> no change<span class="since">${sinceTxt}</span></div>`;
+  if(curr===0&&prev===0)return{html:`<div class="delta flat"><span class="arrow">—</span> no change<span class="since">${sinceTxt}</span></div>`,valClass:""};
   let dir,txt;
   if(fmt==="percent"){
     const pp=(curr-prev)*100;
@@ -678,8 +679,30 @@ function renderDelta(curr,prev,fmt,days){
     }
   }
   const arrow=dir==="up"?"▲":dir==="down"?"▼":"—";
-  return `<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">${sinceTxt}</span></div>`;
+  const html=`<div class="delta ${dir}"><span class="arrow">${arrow}</span> ${txt}<span class="since">${sinceTxt}</span></div>`;
+  const valClass=dir==="up"?" val-up":dir==="down"?" val-down":"";
+  return{html,valClass};
 }
+// Unified value formatter — replaces fmtBuiltin and cFmt with one path that
+// understands the `rounded` flag. Rounded=true forces integers; otherwise
+// money rounds (legacy), percent shows 1 decimal, number shows up to 2.
+function fmtValue(value,fmt,rounded){
+  if(value==null||isNaN(value))return "—";
+  if(fmt==="money"){
+    const v=rounded?Math.round(value):Math.round(value); // money is always whole
+    return "$"+Number(v).toLocaleString("en-US");
+  }
+  if(fmt==="percent"){
+    const v=(value||0)*100;
+    return Number(v).toFixed(rounded?0:1)+"%";
+  }
+  // count / number / default
+  if(rounded)return Number(Math.round(value||0)).toLocaleString();
+  return Number(value||0).toLocaleString("en-US",{maximumFractionDigits:2});
+}
+// Legacy aliases — kept so any code path I missed still works during transition.
+function fmtBuiltin(value,fmt){return fmtValue(value,fmt,false)}
+function cFmt(v,fmt){return fmtValue(v,fmt,false)}
 // Build a context for a different date range using the same RAW filters.
 /* ===================== TAB FILTER (by setter/closer name) ===================== */
 // Per-tab label shown next to the dropdown. Drives UI text only.
@@ -856,16 +879,16 @@ function buildPiece(tab,orderKey,ctx){
     if(def.type==="card"){
       const fn=BUILTIN_COMPUTE[def.compute];if(!fn)return null;
       const r=fn(ctx)||{};
-      const goldOn=ovr.gold!=null?!!ovr.gold:!!r.gold;
-      const goldCls=goldOn?" gold":"";
       const sub=r.sub?`<div class="sub">${esc(r.sub)}</div>`:"";
-      let delta="";
+      let delta="",valClass="";
       if(ovr.compare){
         const prev=prevPeriod(ctx.from,ctx.to);
         const prevR=fn(ctxForRange(parsed.tab,prev.from,prev.to))||{};
-        delta=renderDelta(r.value,prevR.value,r.fmt,windowDays(ctx.from,ctx.to));
+        const d=renderDelta(r.value,prevR.value,r.fmt,windowDays(ctx.from,ctx.to));
+        delta=d.html;valClass=d.valClass;
       }
-      return{kind:"card",html:`<div class="card${goldCls} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val">${fmtBuiltin(r.value,r.fmt)}</div>${sub}${delta}</div>`};
+      const rounded=ovr.rounded!=null?!!ovr.rounded:false;
+      return{kind:"card",html:`<div class="card widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(title)}</div><div class="val${valClass}">${fmtValue(r.value,r.fmt,rounded)}</div>${sub}${delta}</div>`};
     }
     if(def.type==="bar"){
       const cid="bi_"+parsed.tab+"_"+parsed.key;
@@ -895,13 +918,14 @@ function buildPiece(tab,orderKey,ctx){
   const ctrl=widgetCtrl(orderKey,false);
   if(w.type==="card"){
     const v=cAgg(w,ctx.from,ctx.to,ctx.rowFilter);const sub=w.sub?`<div class="sub">${esc(w.sub)}</div>`:"";
-    let delta="";
+    let delta="",valClass="";
     if(w.compare){
       const prev=prevPeriod(ctx.from,ctx.to);
       const prevV=cAgg(w,prev.from,prev.to,ctx.rowFilter);
-      delta=renderDelta(v,prevV,w.fmt,windowDays(ctx.from,ctx.to));
+      const d=renderDelta(v,prevV,w.fmt,windowDays(ctx.from,ctx.to));
+      delta=d.html;valClass=d.valClass;
     }
-    return{kind:"card",html:`<div class="${w.gold?'card gold':'card'} widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val">${cFmt(v,w.fmt)}</div>${sub}${delta}</div>`};
+    return{kind:"card",html:`<div class="card widget" data-key="${esc(orderKey)}">${ctrl}<div class="lbl">${esc(w.title)}</div><div class="val${valClass}">${fmtValue(v,w.fmt,!!w.rounded)}</div>${sub}${delta}</div>`};
   }
   if(w.type==="bar"){
     const cid="cw_"+w.id;
@@ -1051,11 +1075,15 @@ function editBuiltin(orderKey){
   const titleEl=document.getElementById("biEditTitle");
   const compareEl=document.getElementById("biEditCompare");
   const compareRow=document.getElementById("biEditCompareRow");
+  const roundedEl=document.getElementById("biEditRounded");
+  const roundedRow=document.getElementById("biEditRoundedRow");
   titleEl.value=ovr.title!=null?ovr.title:def.title;
   titleEl.placeholder=def.title;
   compareEl.checked=!!ovr.compare;
-  // Comparison only fits on cards. Hide the row for bars and tables.
+  roundedEl.checked=!!ovr.rounded;
+  // Comparison + rounded only apply to cards. Hide the rows for bars and tables.
   compareRow.style.display=def.type==="card"?"flex":"none";
+  roundedRow.style.display=def.type==="card"?"flex":"none";
   back.classList.add("open");setTimeout(()=>titleEl.focus(),20);
 
   const close=()=>{back.classList.remove("open");save.onclick=reset.onclick=cancel.onclick=null};
@@ -1066,12 +1094,15 @@ function editBuiltin(orderKey){
     const t=(titleEl.value||"").trim();
     const next={...ovr};
     if(!t||t===def.title)delete next.title;else next.title=t;
-    if(def.type==="card"){if(compareEl.checked)next.compare=true;else delete next.compare}
+    if(def.type==="card"){
+      if(compareEl.checked)next.compare=true;else delete next.compare;
+      if(roundedEl.checked)next.rounded=true;else delete next.rounded;
+    }
     setBuiltinOverride(p.tab,p.key,Object.keys(next).length?next:null);
     renderTab(p.tab);close();
   };
   reset.onclick=()=>{
-    if(!confirm(`Reset "${def.title}" to default? Title and 7-day comparison will be cleared.`))return;
+    if(!confirm(`Reset "${def.title}" to default? Title, comparison, and rounding will be cleared.`))return;
     setBuiltinOverride(p.tab,p.key,null);renderTab(p.tab);close();
   };
   cancel.onclick=close;
@@ -1123,14 +1154,14 @@ function openWidgetBuilder(tabId,existing){
       dyn.innerHTML=`<label>Calculation</label><select id="wb-agg">
           <option value="sum" ${w.agg==="sum"?"selected":""}>Sum of column</option>
           <option value="count" ${w.agg==="count"?"selected":""}>Count of rows</option>
-          <option value="avg" ${w.agg==="avg"?"selected":""}>Average of column</option>
+          <option value="avg" ${w.agg==="avg"?"selected":""}>Daily Average (sum ÷ days in range)</option>
           <option value="ratio" ${w.agg==="ratio"?"selected":""}>Ratio (A ÷ B)</option>
           <option value="math" ${w.agg==="math"?"selected":""}>Custom math (A,B)</option></select>
         <label>Source</label>${srcSel()}
         <div id="wb-cols"></div>
         <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
         <label>Format</label><select id="wb-fmt"><option value="number" ${w.fmt==="number"?"selected":""}>Number</option><option value="money" ${w.fmt==="money"?"selected":""}>Money ($)</option><option value="percent" ${w.fmt==="percent"?"selected":""}>Percent (%)</option></select>
-        <label class="wb-check"><input type="checkbox" id="wb-gold" ${w.gold?"checked":""}> Gold highlight</label>
+        <label class="wb-check"><input type="checkbox" id="wb-rounded" ${w.rounded?"checked":""}> Round to whole number (no decimals)</label>
         <label class="wb-check"><input type="checkbox" id="wb-compare" ${w.compare?"checked":""}> Show comparison arrow (▲ / ▼ vs same-length previous period)</label>
         <label>Subtitle (optional)</label><input id="wb-sub" value="${esc(w.sub||"")}" placeholder="e.g. closed ÷ taken">`;
       bindCard();
@@ -1176,7 +1207,7 @@ function openWidgetBuilder(tabId,existing){
     w.type=ov.querySelector("#wb-type").value;w.title=ov.querySelector("#wb-title").value.trim()||"Untitled";
     const g=s=>{const el=ov.querySelector(s);return el?el.value:""};
     w.src=g(".wb-src");w.dateCol=g(".wb-date");
-    if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.gold=ov.querySelector("#wb-gold").checked;w.compare=ov.querySelector("#wb-compare").checked;w.sub=g("#wb-sub").trim();
+    if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.rounded=ov.querySelector("#wb-rounded").checked;w.compare=ov.querySelector("#wb-compare").checked;w.sub=g("#wb-sub").trim();
       w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");}
     else if(w.type==="bar"){w.col=g(".wb-col");}
     else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;w.hideEmptyCol=g(".wb-hide")||"";}
@@ -1364,6 +1395,10 @@ window.addEventListener("load",boot);
     <div class="cb-row" id="biEditCompareRow">
       <input type="checkbox" id="biEditCompare">
       <label for="biEditCompare" style="margin:0;text-transform:none;letter-spacing:.2px;color:var(--txt);font-size:13px;cursor:pointer">Show comparison arrow (▲ / ▼ vs same-length previous period)</label>
+    </div>
+    <div class="cb-row" id="biEditRoundedRow">
+      <input type="checkbox" id="biEditRounded">
+      <label for="biEditRounded" style="margin:0;text-transform:none;letter-spacing:.2px;color:var(--txt);font-size:13px;cursor:pointer">Round to whole number (no decimals)</label>
     </div>
     <div class="actions">
       <button class="btn" id="biEditReset">Reset to Default</button>
