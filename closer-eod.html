@@ -29,7 +29,7 @@
   .date-edit:hover{color:var(--gold)}
   .date-edit-icon{font-size:11px;color:var(--gold);margin-left:2px;opacity:.8}
   .date-edit:hover .date-edit-icon{opacity:1}
-  .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;color-scheme:dark;pointer-events:none}
+  .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;color-scheme:dark}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
   .callout b{color:var(--gold-lite)}
@@ -195,15 +195,19 @@ function fmtDateLbl(key){
 $("dateText").textContent=dateLbl;
 $("dateInput").value=dateKey;
 $("dateInput").max=new Date().toISOString().slice(0,10); // no future-dating
-$("dateInput").addEventListener("change",e=>setDate(e.target.value));
-// The native date input lives invisibly behind the date text and has
-// pointer-events:none so clicks land on the text. Any click on the pill calls
-// showPicker() which opens the native picker over the input — that way the
-// whole pill is the hit target, not just the calendar-icon corner.
-document.querySelector(".date-edit").addEventListener("click",()=>{
-  const inp=$("dateInput");
-  if(inp.showPicker){try{inp.showPicker()}catch(_){inp.focus()}}
-  else inp.focus();
+// Hook BOTH change and input events — Safari/iOS only fires "change" reliably,
+// but other browsers can omit it for programmatically-opened pickers.
+const _onDatePicked=()=>{const v=$("dateInput").value;if(v)setDate(v)};
+$("dateInput").addEventListener("change",_onDatePicked);
+$("dateInput").addEventListener("input",_onDatePicked);
+// The input is invisible (opacity:0) overlaid on the date text. Native date
+// inputs only auto-open their picker from the calendar-icon hit area on the
+// right. Force showPicker() on every click anywhere in the input so the whole
+// pill becomes the hit target — clicking "Tuesday, June 17" opens it just
+// like clicking the pencil.
+$("dateInput").addEventListener("click",e=>{
+  e.preventDefault();
+  if(e.currentTarget.showPicker){try{e.currentTarget.showPicker()}catch(_){}}
 });
 
 function hasContent(){
