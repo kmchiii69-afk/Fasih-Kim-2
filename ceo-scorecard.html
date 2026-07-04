@@ -302,7 +302,11 @@
   }
 
   function renderHistory(store){
-    const body=$('histBody');const dates=Object.keys(store).sort().reverse();
+    const body=$('histBody');
+    // Only show submitted days — drafts (touched-but-not-submitted) are kept in
+    // localStorage so SooWei can come back to them, but they don't clutter the
+    // record until she hits Submit.
+    const dates=Object.keys(store).filter(d=>store[d]&&store[d]._submitted).sort().reverse();
     if(!dates.length){body.innerHTML='<tr class="emptyrow"><td colspan="9">No days logged yet. Fill today in and hit Submit.</td></tr>';return;}
     body.innerHTML=dates.map(d=>{const e=store[d];const total=parseFloat(e.hoursTotal)||0,ap=parseFloat(e.hoursAplus)||0;const pct=total>0?Math.round(ap/total*100):0;
       const [y,m,dd]=d.split('-');const short=new Date(y,m-1,dd).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
@@ -311,7 +315,8 @@
   }
 
   function updateStreak(store){
-    const n=Object.keys(store).length;
+    // Only count submitted days toward the streak.
+    const n=Object.keys(store).filter(d=>store[d]&&store[d]._submitted).length;
     $('streakLbl').textContent=n?(n+(n===1?' day logged':' days logged')):'day one';
   }
 
@@ -335,12 +340,23 @@
     return r.json();
   }
   // Normalize any date-ish cell value to YYYY-MM-DD for matching.
+  // Slash-separated dates (like Google Forms writes) are treated as UK
+  // day-first (DD/MM/YYYY) — Goh's forms are UK-based, and JS's default
+  // Date parser would interpret them as US month-first, causing wrong matches.
   function isoDate(v){
     if(!v)return null;
     if(typeof v==='string'){
       // "2026-07-04" already ISO
       if(/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
-      // "04/07/2026" or "7/4/2026" — parseable via Date
+      // "DD/MM/YYYY" or "D/M/YYYY" — parse as day-first (UK convention)
+      const m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if(m){
+        const d=+m[1], mo=+m[2], y=+m[3];
+        if(mo>=1&&mo<=12&&d>=1&&d<=31){
+          return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        }
+      }
+      // Fall back to JS Date parser for other formats
       const d=new Date(v);
       if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       return null;
@@ -374,12 +390,12 @@
           if(!isNaN(n)){sum+=n;matched++;}
         }
       });
-      // Only overwrite if the input is empty (respect manual overrides)
-      // OR if there's no persisted value for this date yet.
-      const persisted=load()[targetDate]?.[kind==='cash'?'cash':'calls'];
-      if(!persisted && !inputEl.value){
-        inputEl.value = sum || '';
-      }
+      // Always populate on date change — SooWei is picking a specific day and
+      // expects to see that day's numbers. If she manually edits after, that's
+      // preserved via localStorage; if she picks a different date and comes
+      // back, the auto-fill runs again but her manual value takes over on the
+      // blur-save the next time she touches the field.
+      inputEl.value = sum || '';
       badgeEl.className='autofill-badge filled';
       badgeEl.textContent = matched?`auto · ${matched} entry${matched>1?'s':''}`:'no data today';
       updateSummary();
@@ -404,7 +420,9 @@
 
   // Explicit Submit — saves locally, pushes to Notion AND writes to the Google
   // Sheet (which the main dashboard reads as a source). Both endpoints upsert
-  // by date so re-submitting a day updates instead of duplicating.
+  // by date so re-submitting a day updates instead of duplicating. Only after
+  // at least one sync succeeds do we mark the entry as _submitted, which is
+  // what gates the record log's visibility.
   async function submit(){
     persistLocal();
     const date=$('dateInput').value||todayStr();
@@ -412,13 +430,25 @@
     $('status').innerHTML='Submitting…';
     const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
-    // Fire both writes in parallel so a slow Notion doesn't delay the sheet write.
     const [notionRes, sheetRes] = await Promise.allSettled([
       fetch('/api/scorecard-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),
       fetch('/api/scorecard-write',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),
     ]);
     const notionOk = notionRes.status==='fulfilled' && notionRes.value.ok;
     const sheetOk  = sheetRes.status==='fulfilled'  && sheetRes.value.ok;
+
+    // If either sync landed, this counts as a real submission — flip the flag
+    // and re-render history so the day appears in the record log.
+    if(notionOk||sheetOk){
+      const store=load();
+      if(store[date]){
+        store[date]._submitted=true;
+        saveAll(store);
+        renderHistory(store);
+        updateStreak(store);
+      }
+    }
+
     const parts=[];
     if(notionOk)parts.push('Notion');
     if(sheetOk)parts.push('Google Sheet');
