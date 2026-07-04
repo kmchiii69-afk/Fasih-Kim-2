@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CEO Scorecard — SooWei</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080605;--panel-a:#14110c;--panel-b:#0b0908;--line:#241d15;--line-str:#352a1e;
+    --row:rgba(255,255,255,.045);--txt:#f1ede5;--muted:#8a8174;--muted2:#5e574c;
+    --gold:#d8a94f;--gold-lite:#f0d79b;--gold-deep:#bf8a2e;--green:#6cbf8e;--red:#dd726a;--amber:#e0a85a;--blue:#9ab2e0;
+    --grad-gold:linear-gradient(170deg,#f3dca0 0%,#d6a449 55%,#bd861f 100%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins',system-ui,sans-serif;color:var(--txt);background:var(--bg);-webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:radial-gradient(120% 70% at 50% -8%,rgba(150,108,46,.20),rgba(150,108,46,0) 48%),radial-gradient(90% 60% at 50% 0%,rgba(60,46,24,.35),rgba(8,6,5,0) 55%);background-attachment:fixed}
+  .wrap{max-width:920px;margin:0 auto;padding:0 22px 130px}
+  .top{display:flex;align-items:center;gap:9px;padding:18px 0;font-size:13px;font-weight:700;letter-spacing:2.6px;color:var(--gold);text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.06)}
+  .top .dia{color:var(--gold-lite);font-size:9px}
+  .hero{text-align:center;padding:44px 0 0}
+  .hero h1{font-size:clamp(34px,5vw,52px);font-weight:700;letter-spacing:-.5px}
+  .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .subline{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap}
+  .subline .dia{color:var(--gold);font-size:9px}
+  .date-edit{position:relative;display:inline-block;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s}
+  .date-edit:hover{color:var(--gold)}
+  .date-edit-icon{font-size:11px;color:var(--gold);margin-left:2px;opacity:.8}
+  .date-edit:hover .date-edit-icon{opacity:1}
+  .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;color-scheme:dark}
+  .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
+  .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
+  .callout b{color:var(--gold-lite)}
+  .carry{margin:14px 0 8px;background:linear-gradient(165deg,rgba(224,168,90,.10),rgba(224,168,90,.02));border:1px solid rgba(224,168,90,.30);border-radius:12px;padding:13px 18px;font-size:13.5px;color:#efe4d0;line-height:1.5}
+  .carry b{color:var(--amber)}
+  .sec{display:flex;align-items:center;gap:18px;margin:40px 2px 18px}
+  .sec h2{font-size:13px;letter-spacing:2.4px;text-transform:uppercase;font-weight:700;white-space:nowrap}
+  .sec .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line-str),transparent)}
+  .sec .small{font-size:10.5px;color:var(--muted2);letter-spacing:.5px;text-transform:none;font-weight:400}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:13px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+  @media(max-width:640px){.grid3{grid-template-columns:1fr}}
+  .mfield{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .mfield.man{border-color:rgba(216,169,79,.25)}
+  .mlabel{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px}
+  .badge{font-size:8.5px;font-weight:700;letter-spacing:.6px;padding:2px 6px;border-radius:4px}
+  .autofill-badge{font-size:8.5px;letter-spacing:.6px;text-transform:none;padding:2px 6px;border-radius:4px;font-weight:600}
+  .autofill-badge.loading{background:rgba(255,255,255,.06);color:var(--muted2)}
+  .autofill-badge.filled{background:rgba(74,222,128,.14);color:#4ade80}
+  .autofill-badge.err{background:rgba(248,113,113,.14);color:#f87171}
+  .badge.fill{background:rgba(224,168,90,.16);color:var(--amber)}
+  .ig{display:flex;align-items:center;gap:4px}
+  .ig .cur{color:var(--gold);font-size:18px;font-weight:600}
+  .mfield input[type=number]{width:100%;background:rgba(0,0,0,.22);border:1px solid var(--line-str);color:var(--txt);
+    padding:9px 11px;border-radius:9px;font-size:19px;font-weight:700;font-family:inherit;-moz-appearance:textfield}
+  .mfield input::-webkit-outer-spin-button,.mfield input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .mfield input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,169,79,.12)}
+
+  /* A+ focus meter */
+  .focusbox{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:13px;padding:17px 18px;margin-top:13px}
+  .focusbox .head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:11px}
+  .focusbox .head .lbl{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .focusbox .head .pct{font-size:30px;font-weight:800;line-height:1;background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .focusbox .bar{height:8px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}
+  .focusbox .bar i{display:block;height:100%;width:0;background:var(--grad-gold);border-radius:5px;transition:width .3s ease}
+  .verdict{margin-top:11px;font-size:13px;font-style:italic;line-height:1.5;color:var(--muted)}
+  .verdict.good{color:var(--green)}.verdict.warn{color:var(--amber)}.verdict.bad{color:var(--red)}
+
+  /* needle movers + text fields */
+  .chipbox{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid rgba(216,169,79,.25);border-radius:13px;padding:15px 16px}
+  .nmrow{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+  .nmrow:last-child{margin-bottom:0}
+  .nmrow .n{font-size:20px;font-weight:800;width:26px;text-align:center;flex:none;background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .txtin{width:100%;background:rgba(0,0,0,.22);border:1px solid var(--line-str);color:var(--txt);padding:11px 13px;border-radius:9px;font-size:14px;font-family:inherit}
+  .txtin:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,169,79,.12)}
+  textarea.txtin{resize:vertical;min-height:58px;line-height:1.5}
+  .hint{font-size:10.5px;color:var(--muted2);margin-top:9px}
+
+  /* yes/no toggle */
+  .yesno{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .yn{background:rgba(0,0,0,.22);border:1px solid var(--line-str);color:var(--muted);font-family:inherit;font-size:14px;font-weight:600;padding:9px 0;border-radius:9px;cursor:pointer;text-align:center;transition:.12s}
+  .yn:hover{border-color:var(--gold-deep);color:var(--gold-lite)}
+  .yn.on-yes{background:rgba(108,191,142,.16);border-color:transparent;color:var(--green);font-weight:700}
+  .yn.on-no{background:rgba(221,114,106,.16);border-color:transparent;color:var(--red);font-weight:700}
+
+  /* rating pills */
+  .ratebox{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);border-radius:13px;padding:16px 17px;margin-bottom:13px}
+  .ratebox.key{border-color:rgba(216,169,79,.25)}
+  .ratebox:last-child{margin-bottom:0}
+  .ratebox .q{font-size:14px;font-weight:600;color:var(--txt);line-height:1.5;margin-bottom:4px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .ratebox .q .now{flex:none;font-size:26px;font-weight:800;line-height:1;background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;min-width:44px;text-align:right}
+  .ratebox .q .now.empty{-webkit-text-fill-color:var(--muted2);color:var(--muted2);font-weight:600;font-size:20px}
+  .ratebox .sub{font-size:11px;color:var(--muted2);margin-bottom:12px}
+  .pills{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+  .pill{background:rgba(0,0,0,.22);border:1px solid var(--line-str);color:var(--muted);font-family:inherit;font-size:14px;font-weight:600;padding:9px 0;border-radius:8px;cursor:pointer;text-align:center;transition:.12s}
+  .pill:hover{border-color:var(--gold-deep);color:var(--gold-lite)}
+  .pill.on{background:var(--grad-gold);color:#241803;border-color:transparent;font-weight:700}
+  @media(max-width:560px){.pills{grid-template-columns:repeat(5,1fr)}}
+
+  /* history */
+  .tbl-card{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:12px 16px;color:var(--muted);font-weight:600;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;border-bottom:1px solid var(--line-str);background:#0e0b08}
+  th.num,td.num{text-align:right}
+  td{padding:13px 16px;border-top:1px solid var(--row);vertical-align:middle}
+  td.pct{color:var(--gold-lite);font-weight:600}
+  .emptyrow td{text-align:center;color:var(--muted);font-style:italic;padding:22px}
+
+  /* bottom bar */
+  .bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(8,6,5,.4),rgba(8,6,5,.96));backdrop-filter:blur(8px);border-top:1px solid var(--line-str);padding:14px 22px;z-index:40}
+  .bar-in{max-width:920px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .summary{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .summary b{color:var(--txt)}
+  .spacer{flex:1}
+  .status{font-size:12.5px;color:var(--muted)}.status b{color:var(--green)}
+  .save{background:var(--grad-gold);color:#241803;border:none;padding:12px 30px;border-radius:10px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;letter-spacing:.4px;transition:.15s}
+  .save:hover{filter:brightness(1.06)}
+  .ghost{background:transparent;border:1px solid var(--line-str);color:var(--muted);padding:11px 18px;border-radius:10px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer}
+  .ghost:hover{border-color:var(--gold);color:var(--gold-lite)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">GOH <span class="dia">◆</span> CEO Scorecard</div>
+
+  <div class="hero">
+    <h1>End of Day <span class="gold">Scorecard</span></h1>
+    <div class="subline"><span>SooWei</span> <span class="dia">◆</span> <span class="date-edit" title="Click to change the date"><span id="dateText"></span> <span class="date-edit-icon">✎</span><input type="date" id="dateInput"></span> <span class="dia">◆</span> <span id="streakLbl"></span></div>
+    <div class="divider"></div>
+  </div>
+
+  <div class="carry" id="carry" style="display:none"></div>
+
+  <!-- TIME -->
+  <div class="sec"><h2>Time</h2><div class="rule"></div></div>
+  <div class="grid3">
+    <div class="mfield"><div class="mlabel">Hours Worked</div><input type="number" id="hoursTotal" min="0" step="0.5" value="" placeholder="0"></div>
+    <div class="mfield"><div class="mlabel">On The Business</div><input type="number" id="hoursBiz" min="0" step="0.5" value="" placeholder="0"></div>
+    <div class="mfield man"><div class="mlabel">On The A+ Problem <span class="badge fill">THE ONE</span></div><input type="number" id="hoursAplus" min="0" step="0.5" value="" placeholder="0"></div>
+  </div>
+  <div class="focusbox">
+    <div class="head"><span class="lbl">A+ share of your day</span><span class="pct" id="aplusPct">—</span></div>
+    <div class="bar"><i id="meterFill"></i></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <!-- NEEDLE MOVERS -->
+  <div class="sec"><h2>Needle-Movers</h2><div class="rule"></div></div>
+  <div class="chipbox">
+    <div class="nmrow"><span class="n">1</span><input class="txtin" type="text" id="nm1" placeholder="First needle-moving activity you actually completed"></div>
+    <div class="nmrow"><span class="n">2</span><input class="txtin" type="text" id="nm2" placeholder="Second"></div>
+    <div class="nmrow"><span class="n">3</span><input class="txtin" type="text" id="nm3" placeholder="Third"></div>
+    <div class="hint">Done, not planned. If you can't name three, that's the signal.</div>
+  </div>
+
+  <!-- NUMBERS -->
+  <div class="sec"><h2>The Numbers</h2><div class="rule"></div></div>
+  <div class="grid">
+    <div class="mfield man"><div class="mlabel">Cash Collected <span class="autofill-badge" id="cashBadge"></span></div><div class="ig"><span class="cur">$</span><input type="number" id="cash" min="0" value="" placeholder="0"></div></div>
+    <div class="mfield man"><div class="mlabel">Booked Calls Generated <span class="autofill-badge" id="callsBadge"></span></div><input type="number" id="calls" min="0" value="" placeholder="0"></div>
+    <div class="mfield man"><div class="mlabel">Story Posted</div><div class="yesno" id="storyToggle"></div></div>
+  </div>
+
+  <!-- SELF -->
+  <div class="sec"><h2>The Standard</h2><div class="rule"></div></div>
+  <div class="ratebox key">
+    <div class="q"><span>Was I the CEO the business needed today to scale to $1M/mo?</span><span class="now empty" id="ceoNow">—</span></div>
+    <div class="sub">1 = nowhere near it &nbsp;·&nbsp; 10 = exactly that person today</div>
+    <div class="pills" id="ceoPills"></div>
+  </div>
+  <div class="ratebox">
+    <div class="q"><span>Energy level today</span><span class="now empty" id="energyNow">—</span></div>
+    <div class="sub">1 = running on empty &nbsp;·&nbsp; 10 = fully switched on</div>
+    <div class="pills" id="energyPills"></div>
+  </div>
+
+  <!-- TOMORROW -->
+  <div class="sec"><h2>Tomorrow</h2><div class="rule"></div></div>
+  <div class="chipbox">
+    <textarea class="txtin" id="focus" placeholder="What am I going to focus on tomorrow?"></textarea>
+    <div class="hint">This greets you at the top of the scorecard tomorrow — did you do it?</div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="sec"><h2>The Record</h2><div class="rule"></div></div>
+  <div class="tbl-card">
+    <table>
+      <thead><tr><th>Date</th><th class="num">Hrs</th><th class="num">A+ %</th><th class="num">Cash</th><th class="num">Calls</th><th class="num">Story</th><th class="num">CEO</th><th class="num">Energy</th><th>Focus set</th></tr></thead>
+      <tbody id="histBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="summary" id="summary"></div>
+    <div class="spacer"></div>
+    <span class="status" id="status"></span>
+    <button class="ghost" id="exportBtn">Export CSV</button>
+    <button class="save" id="saveBtn">Submit</button>
+  </div>
+</div>
+
+<script>
+  // ═══════════════════════════════════════════════════════════════════
+  // CONFIG — set the sheet IDs and tab/column names, one-time.
+  // ═══════════════════════════════════════════════════════════════════
+  // Auto-fill sources. On load and every date change, we fetch these two
+  // sheets and populate Cash + Booked Calls for the selected day.
+  // Leave the field editable so SooWei can override if a number's off.
+  const AUTOFILL = {
+    cash: {
+      sheetId: '1t282L3hUGHwDL35hOPBULaGzUWcVYvRZqAj4RENlDs8', // Cash Collected sheet
+      tab:     'Sheet1',                  // ⚑ update if your tab name differs
+      dateCol: 'Date',
+      valueCol:'Cash Collected',
+    },
+    bookings: {
+      sheetId: '1Y8SH2VrNKoxhztz2GHPgjQ0744Krs3dYPETz-lYYWsQ', // Setter EOD sheet
+      tab:     'Form Responses 1',        // ⚑ update if your tab name differs
+      dateCol: 'Date of report',
+      valueCol:'# of Qualified Bookings', // prefix match — the full "(Number only…)" tail is handled
+    },
+  };
+  const DASHBOARD_TOKEN = ''; // ⚑ if /api/sheets is behind DASHBOARD_TOKEN, paste it here
+  // ═══════════════════════════════════════════════════════════════════
+
+  const KEY='gohCeoScorecard';
+  const $=id=>document.getElementById(id);
+  const fields=['hoursTotal','hoursBiz','hoursAplus','nm1','nm2','nm3','cash','calls','story','ceoRating','energy','focus'];
+  const ratings={ceoRating:null,energy:null};
+  const toggles={story:null}; // 'yes' | 'no' | null
+  const fmtMoney=v=>"$"+(Math.round(Number(v)||0)).toLocaleString();
+
+  function todayStr(){const d=new Date();const off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,10);}
+  function fmtDateLbl(key){const [y,m,d]=key.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});}
+  function load(){try{return JSON.parse(localStorage.getItem(KEY))||{};}catch(e){return{};}}
+  function saveAll(o){localStorage.setItem(KEY,JSON.stringify(o));}
+
+  function computeAplus(){
+    const total=parseFloat($('hoursTotal').value)||0, ap=parseFloat($('hoursAplus').value)||0;
+    const pct=total>0?Math.round(ap/total*100):0;
+    $('meterFill').style.width=Math.min(pct,100)+'%';
+    $('aplusPct').textContent=total>0?pct+'%':'—';
+    const v=$('verdict');
+    if(total===0){v.textContent='Log your hours to see how much of the day went to the A+ problem.';v.className='verdict';return;}
+    if(pct>=40){v.textContent='This is a CEO day. You spent it on what compounds.';v.className='verdict good';}
+    else if(pct>=20){v.textContent='Decent — but the A+ problem deserves more of you.';v.className='verdict warn';}
+    else{v.textContent='Busy, not effective. Almost none of today went to the A+ problem.';v.className='verdict bad';}
+  }
+
+  function updateSummary(){
+    const total=parseFloat($('hoursTotal').value)||0, ap=parseFloat($('hoursAplus').value)||0;
+    const pct=total>0?Math.round(ap/total*100):0;
+    $('summary').innerHTML=`<span>Worked <b>${total||0}h</b></span><span>A+ <b>${total>0?pct+'%':'—'}</b></span><span>Cash <b>${fmtMoney($('cash').value)}</b></span><span>Calls <b>${(+$('calls').value||0)}</b></span><span>Story <b>${toggles.story?toggles.story==='yes'?'✓':'✗':'—'}</b></span><span>CEO <b>${ratings.ceoRating!=null?ratings.ceoRating+'/10':'—'}</b></span>`;
+  }
+
+  function currentEntry(){const o={};fields.forEach(f=>{if(f in ratings)o[f]=ratings[f];else if(f in toggles)o[f]=toggles[f];else o[f]=$(f).value;});return o;}
+  function fillForm(e){
+    fields.forEach(f=>{if(f in ratings||f in toggles)return;$(f).value=e&&e[f]!=null?e[f]:'';});
+    ratings.ceoRating=e&&e.ceoRating!=null?e.ceoRating:null;
+    ratings.energy=e&&e.energy!=null?e.energy:null;
+    toggles.story=e&&e.story!=null?e.story:null;
+    renderPills('ceoPills','ceoNow','ceoRating');renderPills('energyPills','energyNow','energy');
+    renderStory();
+    computeAplus();updateSummary();
+  }
+
+  function renderStory(){
+    const box=$('storyToggle');const val=toggles.story;
+    box.innerHTML=['yes','no'].map(v=>{
+      const on=val===v?(v==='yes'?' on-yes':' on-no'):'';
+      return `<button class="yn${on}" data-v="${v}">${v==='yes'?'Yes':'No'}</button>`;
+    }).join('');
+    box.querySelectorAll('.yn').forEach(b=>b.addEventListener('click',()=>{
+      const v=b.dataset.v;toggles.story=toggles.story===v?null:v;
+      renderStory();updateSummary();persistLocal();
+    }));
+  }
+
+  function renderPills(boxId,nowId,key){
+    const box=$(boxId);const val=ratings[key];
+    box.innerHTML=Array.from({length:10},(_,i)=>{const n=i+1;return `<button class="pill${val===n?' on':''}" data-n="${n}">${n}</button>`;}).join('');
+    box.querySelectorAll('.pill').forEach(p=>p.addEventListener('click',()=>{
+      const n=+p.dataset.n;ratings[key]=ratings[key]===n?null:n;
+      renderPills(boxId,nowId,key);updateSummary();persistLocal();
+    }));
+    const now=$(nowId);
+    if(val==null){now.textContent='—';now.classList.add('empty');}
+    else{now.textContent=val+'/10';now.classList.remove('empty');}
+  }
+
+  function showCarry(store,date){
+    const dates=Object.keys(store).filter(d=>d<date).sort().reverse();
+    for(const d of dates){if(store[d]&&store[d].focus&&store[d].focus.trim()){
+      const c=$('carry');c.style.display='block';
+      c.innerHTML='<b>Yesterday you committed to:</b> "'+store[d].focus.trim()+'" — did you do it?';return;}}
+    $('carry').style.display='none';
+  }
+
+  function renderHistory(store){
+    const body=$('histBody');const dates=Object.keys(store).sort().reverse();
+    if(!dates.length){body.innerHTML='<tr class="emptyrow"><td colspan="9">No days logged yet. Fill today in and hit Submit.</td></tr>';return;}
+    body.innerHTML=dates.map(d=>{const e=store[d];const total=parseFloat(e.hoursTotal)||0,ap=parseFloat(e.hoursAplus)||0;const pct=total>0?Math.round(ap/total*100):0;
+      const [y,m,dd]=d.split('-');const short=new Date(y,m-1,dd).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      return `<tr><td>${short}</td><td class="num">${total||'—'}</td><td class="num pct">${total>0?pct+'%':'—'}</td><td class="num">${e.cash?fmtMoney(e.cash):'—'}</td><td class="num">${e.calls||'—'}</td><td class="num">${e.story?(e.story==='yes'?'✓':'✗'):'—'}</td><td class="num pct">${e.ceoRating!=null?e.ceoRating:'—'}</td><td class="num">${e.energy!=null?e.energy:'—'}</td><td>${e.focus&&e.focus.trim()?'✓':'—'}</td></tr>`;
+    }).join('');
+  }
+
+  function updateStreak(store){
+    const n=Object.keys(store).length;
+    $('streakLbl').textContent=n?(n+(n===1?' day logged':' days logged')):'day one';
+  }
+
+  function loadDate(){
+    const store=load();const date=$('dateInput').value;
+    fillForm(store[date]);showCarry(store,date);
+    $('dateText').textContent=fmtDateLbl(date);
+    runAutofills(date); // pull cash + booked calls from the sheets for this day
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // AUTO-FILL — pull the day's Cash Collected and Booked Calls from the
+  // configured sheets via /api/sheets. Fills the field if empty; otherwise
+  // leaves it alone so SooWei's manual overrides win.
+  // ═══════════════════════════════════════════════════════════════════
+  async function fetchSheet(sheetId,tab){
+    const q=new URLSearchParams({id:sheetId,tab});
+    if(DASHBOARD_TOKEN)q.set('token',DASHBOARD_TOKEN);
+    const r=await fetch('/api/sheets?'+q.toString());
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }
+  // Normalize any date-ish cell value to YYYY-MM-DD for matching.
+  function isoDate(v){
+    if(!v)return null;
+    if(typeof v==='string'){
+      // "2026-07-04" already ISO
+      if(/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+      // "04/07/2026" or "7/4/2026" — parseable via Date
+      const d=new Date(v);
+      if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      return null;
+    }
+    if(v instanceof Date){
+      return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+    }
+    return null;
+  }
+  // Prefix-match — same tolerance as the dashboard so "Cash Collected" resolves
+  // to "Cash Collected\n(Number only…)" if the form header has descriptive text.
+  function resolveHeader(headers,want){
+    const norm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+    const w=norm(want);
+    return headers.find(h=>norm(h)===w) || headers.find(h=>norm(h).startsWith(w)) || null;
+  }
+  async function autofillFor(kind, cfg, targetDate){
+    const badgeEl=$(kind==='cash'?'cashBadge':'callsBadge');
+    const inputEl=$(kind==='cash'?'cash':'calls');
+    if(!cfg.sheetId){badgeEl.className='autofill-badge';badgeEl.textContent='';return}
+    badgeEl.className='autofill-badge loading';badgeEl.textContent='syncing…';
+    try{
+      const data=await fetchSheet(cfg.sheetId,cfg.tab);
+      const dateH=resolveHeader(data.headers,cfg.dateCol);
+      const valH =resolveHeader(data.headers,cfg.valueCol);
+      if(!dateH||!valH){badgeEl.className='autofill-badge err';badgeEl.textContent='col not found';return}
+      let sum=0,matched=0;
+      data.rows.forEach(r=>{
+        if(isoDate(r[dateH])===targetDate){
+          const n=parseFloat(r[valH]);
+          if(!isNaN(n)){sum+=n;matched++;}
+        }
+      });
+      // Only overwrite if the input is empty (respect manual overrides)
+      // OR if there's no persisted value for this date yet.
+      const persisted=load()[targetDate]?.[kind==='cash'?'cash':'calls'];
+      if(!persisted && !inputEl.value){
+        inputEl.value = sum || '';
+      }
+      badgeEl.className='autofill-badge filled';
+      badgeEl.textContent = matched?`auto · ${matched} entry${matched>1?'s':''}`:'no data today';
+      updateSummary();
+    }catch(err){
+      badgeEl.className='autofill-badge err';badgeEl.textContent='sync failed';
+    }
+  }
+  async function runAutofills(targetDate){
+    await Promise.all([
+      autofillFor('cash',    AUTOFILL.cash,     targetDate),
+      autofillFor('bookings',AUTOFILL.bookings, targetDate),
+    ]);
+  }
+
+  // Silent local autosave — never touches the network. Keeps the day's work
+  // safe as you fill it in, without creating Notion rows on every keystroke.
+  function persistLocal(){
+    const store=load();const date=$('dateInput').value||todayStr();
+    store[date]=currentEntry();saveAll(store);
+    renderHistory(store);updateStreak(store);
+  }
+
+  // Explicit Submit — saves locally, pushes to Notion AND writes to the Google
+  // Sheet (which the main dashboard reads as a source). Both endpoints upsert
+  // by date so re-submitting a day updates instead of duplicating.
+  async function submit(){
+    persistLocal();
+    const date=$('dateInput').value||todayStr();
+    const payload={date,...currentEntry()};
+    $('status').innerHTML='Submitting…';
+    const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+    // Fire both writes in parallel so a slow Notion doesn't delay the sheet write.
+    const [notionRes, sheetRes] = await Promise.allSettled([
+      fetch('/api/scorecard-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),
+      fetch('/api/scorecard-write',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),
+    ]);
+    const notionOk = notionRes.status==='fulfilled' && notionRes.value.ok;
+    const sheetOk  = sheetRes.status==='fulfilled'  && sheetRes.value.ok;
+    const parts=[];
+    if(notionOk)parts.push('Notion');
+    if(sheetOk)parts.push('Google Sheet');
+    if(parts.length===2){
+      $('status').innerHTML=`<b>Submitted ${t}</b> · synced to ${parts.join(' + ')}`;
+    }else if(parts.length===1){
+      $('status').innerHTML=`<b>Submitted ${t}</b> · synced to ${parts[0]} (other failed)`;
+    }else{
+      $('status').innerHTML=`<b>Saved ${t}</b> · both syncs failed`;
+    }
+  }
+
+  function exportCsv(){
+    const store=load();const dates=Object.keys(store).sort();
+    const head=['Date','Hours total','Hours on business','Hours A+','A+ %','Needle 1','Needle 2','Needle 3','Cash','Booked calls','Story posted','CEO rating /10','Energy /10','Focus tomorrow'];
+    const rows=[head];
+    dates.forEach(d=>{const e=store[d];const total=parseFloat(e.hoursTotal)||0,ap=parseFloat(e.hoursAplus)||0;const pct=total>0?Math.round(ap/total*100):'';
+      rows.push([d,e.hoursTotal||'',e.hoursBiz||'',e.hoursAplus||'',pct,e.nm1||'',e.nm2||'',e.nm3||'',e.cash||'',e.calls||'',e.story||'',e.ceoRating||'',e.energy||'',(e.focus||'').replace(/\n/g,' ')]);});
+    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='ceo-scorecard.csv';a.click();
+  }
+
+  // init
+  const t=todayStr();
+  $('dateInput').value=t;$('dateInput').max=t;$('dateText').textContent=fmtDateLbl(t);
+  const store0=load();
+  loadDate();renderHistory(store0);updateStreak(store0);
+  ['hoursTotal','hoursAplus'].forEach(f=>$(f).addEventListener('input',()=>{computeAplus();updateSummary();}));
+  ['cash','calls'].forEach(f=>$(f).addEventListener('input',updateSummary));
+  $('dateInput').addEventListener('change',loadDate);
+  $('dateInput').addEventListener('input',loadDate);
+  $('dateInput').addEventListener('click',e=>{e.preventDefault();if(e.currentTarget.showPicker){try{e.currentTarget.showPicker()}catch(_){}}});
+  $('saveBtn').addEventListener('click',submit);
+  $('exportBtn').addEventListener('click',exportCsv);
+  fields.forEach(f=>{if(f in ratings||f in toggles)return;$(f).addEventListener('blur',persistLocal);});
+</script>
+</body>
+</html>
