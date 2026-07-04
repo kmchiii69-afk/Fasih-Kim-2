@@ -25,11 +25,14 @@
   .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .subline{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap}
   .subline .dia{color:var(--gold);font-size:9px}
-  .date-edit{position:relative;display:inline-block;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s}
+  .date-edit{display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s;background:transparent;border:0;padding:0;font:inherit;font-size:inherit;letter-spacing:inherit}
   .date-edit:hover{color:var(--gold)}
-  .date-edit-icon{font-size:11px;color:var(--gold);margin-left:2px;opacity:.8}
+  .date-edit:focus-visible{outline:1px dashed var(--gold);outline-offset:3px;border-radius:2px}
+  .date-edit-icon{font-size:11px;color:var(--gold);opacity:.8}
   .date-edit:hover .date-edit-icon{opacity:1}
-  .date-edit input[type="date"]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0;color-scheme:dark}
+  /* The hidden picker input — sized 1×1 px so the native picker has a real
+     position to anchor to, but it's invisible and ignored by keyboard nav. */
+  #dateInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0;color-scheme:dark}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
   .callout b{color:var(--gold-lite)}
@@ -121,7 +124,7 @@
 
   <div class="hero">
     <h1>End of Day <span class="gold">Report</span></h1>
-    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span class="date-edit" title="Click to change submission date"><span id="dateText"></span> <span class="date-edit-icon">✎</span><input type="date" id="dateInput"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
+    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <button type="button" class="date-edit" id="dateEditBtn" title="Click to change submission date"><span id="dateText"></span> <span class="date-edit-icon">✎</span></button><input type="date" id="dateInput" tabindex="-1" aria-hidden="true"> <span class="dia">◆</span> <span id="srcLbl"></span></div>
     <div class="divider"></div>
   </div>
 
@@ -195,19 +198,20 @@ function fmtDateLbl(key){
 $("dateText").textContent=dateLbl;
 $("dateInput").value=dateKey;
 $("dateInput").max=new Date().toISOString().slice(0,10); // no future-dating
-// Hook BOTH change and input events — Safari/iOS only fires "change" reliably,
-// but other browsers can omit it for programmatically-opened pickers.
+// Date picking wiring. The visible <button> opens the picker; the hidden
+// <input type="date"> receives the picked value and fires `change`.
 const _onDatePicked=()=>{const v=$("dateInput").value;if(v)setDate(v)};
 $("dateInput").addEventListener("change",_onDatePicked);
 $("dateInput").addEventListener("input",_onDatePicked);
-// The input is invisible (opacity:0) overlaid on the date text. Native date
-// inputs only auto-open their picker from the calendar-icon hit area on the
-// right. Force showPicker() on every click anywhere in the input so the whole
-// pill becomes the hit target — clicking "Tuesday, June 17" opens it just
-// like clicking the pencil.
-$("dateInput").addEventListener("click",e=>{
-  e.preventDefault();
-  if(e.currentTarget.showPicker){try{e.currentTarget.showPicker()}catch(_){}}
+$("dateEditBtn").addEventListener("click",()=>{
+  const inp=$("dateInput");
+  if(inp.showPicker){
+    try{inp.showPicker()}
+    catch(err){console.warn("showPicker failed, falling back to click+focus:",err);inp.focus();inp.click()}
+  }else{
+    // Older browser fallback — focus + click, which opens the picker on most engines.
+    inp.focus();inp.click();
+  }
 });
 
 function hasContent(){
@@ -218,7 +222,7 @@ function hasContent(){
 function resetForm(){
   AUTO.forEach(([id])=>{const el=$(id);if(el)el.value=0});
   $("m_cancel").value=0;$("m_noshow").value=0;
-  noShows=[];cancelled=[];syncNoShow();syncCancel();
+  noShows.length=0;cancelled.length=0;syncNoShow();syncCancel();
   submitted=false;lock(false);
   $("submitBtn").textContent="Submit EOD";$("submitBtn").classList.remove("done");
   $("status").textContent="";$("reopenBtn").style.display="none";
@@ -236,6 +240,9 @@ function setDate(newKey){
   dateKey=newKey;dateLbl=fmtDateLbl(newKey);
   $("dateText").textContent=dateLbl;$("dateInput").value=dateKey;
   resetForm();
+  // Show a "loading" state while we swap to the new day's calls.
+  $("callout").innerHTML="<b>Loading calls for "+dateLbl+"…</b>";
+  loadCalls(); // pull Fathom calls for the new date
   loadSaved(); // restore a prior submission for that date, if any
 }
 
@@ -336,23 +343,36 @@ async function loadSaved(){
     const r=window.storage&&await window.storage.get("eod:"+dateKey);
     if(r&&r.value){const d=JSON.parse(r.value);
       AUTO.forEach(([id])=>{if(d[id]!=null)$(id).value=d[id]});
-      $("m_cancel").value=d.cancellations||0;noShows=d.noShowNames||[];syncNoShow();
-      cancelled=d.cancelledNames||[];syncCancel();
-      doSubmit();
+      $("m_cancel").value=d.cancellations||0;
+      // Mutate the array in place — reassigning would break the closure inside
+      // wireChipInput (its handlers hold a reference to the ORIGINAL array).
+      noShows.length=0;noShows.push(...(d.noShowNames||[]));syncNoShow();
+      cancelled.length=0;cancelled.push(...(d.cancelledNames||[]));syncCancel();
+      // Mark the form as previously-submitted (lock it, show Re-open button) —
+      // but DON'T call doSubmit(), which would fire another fetch to
+      // /api/eod-submit and post a duplicate Discord message every time the
+      // date picker lands on this day.
+      submitted=true;lock(true);
+      const t=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+      $("submitBtn").textContent="✓ Submitted";$("submitBtn").classList.add("done");
+      $("status").innerHTML=`<b>Loaded from ${t}</b> · already submitted on this date`;
+      $("reopenBtn").style.display="inline-block";
+      $("callout").innerHTML="<b>EOD already submitted</b> for "+dateLbl+". Hit Re-open if you need to correct anything.";
+      updateSummary();
     }
   }catch(e){}
 }
 
 async function loadCalls(){
   try{
-    const r=await fetch(API_BASE+"/api/eod-extract");
+    const r=await fetch(API_BASE+"/api/eod-extract?date="+encodeURIComponent(dateKey));
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();
     if(d.error)throw new Error(d.error);
     CALLS=Array.isArray(d.calls)?d.calls:[];
   }catch(e){
     CALLS=[];
-    $("callout").innerHTML="<b>Couldn't load today's calls.</b> "+(e.message||e)+" — you can still fill the EOD manually below.";
+    $("callout").innerHTML="<b>Couldn't load calls for "+dateLbl+".</b> "+(e.message||e)+" — you can still fill the EOD manually below.";
   }
   $("callCount").textContent=CALLS.length;
   $("srcLbl").textContent="Fathom · "+CALLS.length+" calls";
