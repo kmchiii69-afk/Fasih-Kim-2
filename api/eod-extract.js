@@ -20,15 +20,23 @@ function send(res, status, obj) {
   res.status(status).send(JSON.stringify(obj));
 }
 
-// Start/end of "today" in UK time, returned as UTC ISO strings for Fathom filters.
-function ukDayWindow() {
+// Start/end of a UK day, returned as UTC ISO strings for Fathom filters.
+// dateStr is an optional YYYY-MM-DD — defaults to today (as seen in London).
+function ukDayWindow(dateStr) {
   const now = new Date();
-  // Get today's date as seen in London
-  const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
-  const y = ukNow.getFullYear(), m = ukNow.getMonth(), d = ukNow.getDate();
+  let y, m, d;
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    // Explicit date requested (e.g. yesterday when the closer backdates the EOD).
+    const [yy, mm, dd] = dateStr.split("-").map(Number);
+    y = yy; m = mm - 1; d = dd;
+  } else {
+    const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
+    y = ukNow.getFullYear(); m = ukNow.getMonth(); d = ukNow.getDate();
+  }
   // Build local-London midnight and next midnight, then convert to UTC by
   // measuring London's offset right now.
-  const offsetMs = now.getTime() - ukNow.getTime(); // UTC - London display
+  const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
+  const offsetMs = now.getTime() - ukNow.getTime();
   const startLocal = new Date(y, m, d, 0, 0, 0, 0).getTime();
   const endLocal = new Date(y, m, d + 1, 0, 0, 0, 0).getTime();
   return {
@@ -200,7 +208,7 @@ export default async function handler(req, res) {
     if (!anthropicKey) return send(res, 500, { error: "ANTHROPIC_API_KEY not set" });
     if (!email) return send(res, 500, { error: "CLOSER_GEORGE_EMAIL not set" });
 
-    const { after, before } = ukDayWindow();
+    const { after, before } = ukDayWindow(req.query.date);
     const meetings = await fathomMeetings(fathomKey, email, after, before);
 
     // Keep only real sales calls: drop internal-titled meetings (Sales Huddle,
