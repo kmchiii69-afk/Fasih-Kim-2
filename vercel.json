@@ -7,6 +7,14 @@
     {
       "path": "/api/eod-reminder",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/monthly-cost-reminder",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/monthly-cost-reminder",
+      "schedule": "0 18 * * *"
     }
   ]
 }
