@@ -10,8 +10,8 @@
 //   GOOGLE_SERVICE_ACCOUNT_KEY   → same one used elsewhere
 //   MONTHLY_COSTS_SHEET_ID       → same sheet the write endpoint uses
 //   MONTHLY_COSTS_TAB            → default "Sheet1"
-//   DISCORD_WEBHOOK_URL          → Discord webhook to post to
-//   DISCORD_SOOWEI_ID            → SooWei's Discord user ID for the <@id> ping
+//   MONTHLY_COSTS_WEBHOOK_URL          → Discord webhook to post to
+//   DISCORD_FASIH_ID            → SooWei's Discord user ID for the <@id> ping
 //   MONTHLY_COSTS_FORM_URL       → public URL of /monthly-costs.html
 //   CRON_SECRET                  → set by Vercel; verified when present
 //   MONTHLY_REMINDER_FORCE       → set to "1" to bypass time gate when testing
@@ -78,9 +78,9 @@ export default async function handler(req, res) {
 
     const sheetId = process.env.MONTHLY_COSTS_SHEET_ID;
     const tab = process.env.MONTHLY_COSTS_TAB || "Sheet1";
-    const webhook = process.env.DISCORD_WEBHOOK_URL;
+    const webhook = process.env.MONTHLY_COSTS_WEBHOOK_URL;
     if (!sheetId) return send(res, 500, { error: "MONTHLY_COSTS_SHEET_ID not set" });
-    if (!webhook) return send(res, 500, { error: "DISCORD_WEBHOOK_URL not set" });
+    if (!webhook) return send(res, 500, { error: "MONTHLY_COSTS_WEBHOOK_URL not set (create a Discord webhook for the target channel and paste the URL here)" });
 
     // Check whether this month's row already exists.
     const sheets = google.sheets({ version: "v4", auth: getAuth() });
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
       return send(res, 200, { ok: true, reminded: false, reason: `Costs for ${monthKey} already logged` });
     }
 
-    const ping = process.env.DISCORD_SOOWEI_ID ? `<@${process.env.DISCORD_SOOWEI_ID}>` : "@SooWei";
+    const ping = process.env.DISCORD_FASIH_ID ? `<@${process.env.DISCORD_FASIH_ID}>` : "@Fasih";
     const formUrl = process.env.MONTHLY_COSTS_FORM_URL || "";
     const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
@@ -113,9 +113,18 @@ export default async function handler(req, res) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content, embeds: [embed], allowed_mentions: { parse: ["users"] } }),
     });
-    if (!dr.ok) return send(res, 500, { error: "Discord " + dr.status + ": " + (await dr.text()).slice(0, 200) });
+    const drText = await dr.text();
+    if (!dr.ok) return send(res, 500, { error: "Discord " + dr.status + ": " + drText.slice(0, 400) });
 
-    return send(res, 200, { ok: true, reminded: true, month: monthKey });
+    // Return Discord's response so we can verify the message actually landed.
+    return send(res, 200, {
+      ok: true,
+      reminded: true,
+      month: monthKey,
+      discordStatus: dr.status,
+      discordResponse: drText.slice(0, 400) || "(empty)",
+      webhookHostSuffix: webhook.slice(-20), // last 20 chars, to confirm we used the right webhook
+    });
   } catch (err) {
     return send(res, 500, { error: (err && err.message) || String(err) });
   }
