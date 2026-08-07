@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Costs · GOH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906; --panel:#1a1610; --panel-alt:#0f0d09;
+    --txt:#f4ede0; --muted:#a89a80; --muted2:#6b5f4a;
+    --gold:#d8a94f; --gold-lite:#f0c968; --gold-dark:#a37a2e;
+    --grad-gold:linear-gradient(135deg,#d8a94f 0%,#f0c968 45%,#a37a2e 100%);
+    --border:#352a1e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:'Poppins',sans-serif;font-weight:400;line-height:1.5;min-height:100vh}
+  .wrap{max-width:640px;margin:0 auto;padding:40px 24px}
+  .hero{text-align:center;padding-bottom:24px;border-bottom:1px solid var(--border)}
+  h1{font-size:32px;font-weight:800;letter-spacing:-.5px}
+  h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .subline{color:var(--muted);font-size:13px;margin-top:8px;letter-spacing:.3px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px;margin-top:24px}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600}
+  .mfield{margin-bottom:20px}
+  select,input[type="text"],input[type="number"]{width:100%;background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:15px;font-family:inherit;box-sizing:border-box}
+  select:focus,input:focus{outline:none;border-color:rgba(216,169,79,.55)}
+  .ig{position:relative}
+  .ig input{padding-left:32px}
+  .ig .cur{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600}
+  .btn{display:block;width:100%;background:var(--grad-gold);color:#241803;border:0;border-radius:10px;padding:14px 22px;font-size:15px;font-weight:700;letter-spacing:.4px;cursor:pointer;font-family:inherit;margin-top:8px}
+  .btn:disabled{opacity:.55;cursor:default}
+  .btn.done{background:#1f2c1f;color:#8ce68c;border:1px solid #2a4a2a}
+  .status{margin-top:14px;color:var(--muted);font-size:13px;text-align:center;min-height:20px}
+  .status b{color:var(--txt);font-weight:600}
+  .history{margin-top:22px}
+  .history table{width:100%;border-collapse:collapse;font-size:13px}
+  .history th{text-align:left;font-weight:600;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px}
+  .history td{padding:10px;border-bottom:1px solid #221c14}
+  .history td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .emptyrow td{text-align:center;color:var(--muted2);padding:22px 10px}
+  .note{font-size:11px;color:var(--muted2);margin-top:10px;letter-spacing:.2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Monthly <span class="gold">Costs</span></h1>
+    <div class="subline">Delivery cost + acquisition spend, one entry per month.</div>
+  </div>
+
+  <div class="card">
+    <div class="mfield">
+      <div class="label">Month</div>
+      <select id="monthSel"></select>
+    </div>
+    <div class="mfield">
+      <div class="label">Direct Delivery Cost</div>
+      <div class="ig"><span class="cur">$</span><input type="number" id="delivery" min="0" step="0.01" placeholder="0"></div>
+      <div class="note">What it cost you to deliver on the work — coaches, fulfillment, tooling, etc.</div>
+    </div>
+    <div class="mfield">
+      <div class="label">Acquisition Spend</div>
+      <div class="ig"><span class="cur">$</span><input type="number" id="acquisition" min="0" step="0.01" placeholder="0"></div>
+      <div class="note">Ad spend, agency fees, sponsorships — money spent to acquire NEW customers.</div>
+    </div>
+    <button class="btn" id="submitBtn">Save Month</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card history">
+    <div class="label">Recent months</div>
+    <table>
+      <thead><tr><th>Month</th><th class="num">Delivery</th><th class="num">Acquisition</th></tr></thead>
+      <tbody id="histBody"><tr class="emptyrow"><td colspan="3">No months saved yet.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+
+  // Populate month dropdown: current month + previous 11 months + next month
+  function buildMonthOptions(){
+    const now=new Date();
+    const opts=[];
+    for(let i=-1;i<=12;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0');
+      const key=`${y}-${m}`;
+      const label=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+      opts.push({key,label,delta:i});
+    }
+    // Reverse so most-recent-first
+    opts.sort((a,b)=>b.delta-a.delta);
+    $('monthSel').innerHTML=opts.map(o=>{
+      const marker = o.delta===0?' (this month)':o.delta===-1?' (last month)':'';
+      return `<option value="${o.key}"${o.delta===-1?' selected':''}>${o.label}${marker}</option>`;
+    }).join('');
+  }
+
+  async function loadHistory(){
+    try{
+      const r=await fetch('/api/monthly-costs-read');
+      if(!r.ok)return;
+      const {rows}=await r.json();
+      if(!rows||!rows.length){
+        $('histBody').innerHTML='<tr class="emptyrow"><td colspan="3">No months saved yet.</td></tr>';
+        return;
+      }
+      const sorted=rows.slice().sort((a,b)=>String(b.Month).localeCompare(String(a.Month)));
+      $('histBody').innerHTML=sorted.map(r=>{
+        const [y,m]=String(r.Month).split('-');
+        const label=y&&m?new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'}):r.Month;
+        const fmt=v=>v?'$'+Number(v).toLocaleString():'—';
+        return `<tr><td>${label}</td><td class="num">${fmt(r['Delivery Cost'])}</td><td class="num">${fmt(r['Acquisition Spend'])}</td></tr>`;
+      }).join('');
+      // Auto-fill the form if we already have this month's data
+      const currentMonth=$('monthSel').value;
+      const existing=rows.find(r=>String(r.Month)===currentMonth);
+      if(existing){
+        $('delivery').value=existing['Delivery Cost']||'';
+        $('acquisition').value=existing['Acquisition Spend']||'';
+        $('status').innerHTML=`<b>Existing entry loaded</b> for ${currentMonth} · edit and re-save to update`;
+      }
+    }catch(e){/* silent */}
+  }
+
+  async function submit(){
+    const btn=$('submitBtn');btn.disabled=true;
+    const payload={
+      month:$('monthSel').value,
+      deliveryCost:parseFloat($('delivery').value)||0,
+      acquisitionSpend:parseFloat($('acquisition').value)||0,
+    };
+    $('status').textContent='Saving…';
+    try{
+      const r=await fetch('/api/monthly-costs-write',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+      });
+      const j=await r.json();
+      if(!r.ok||j.error)throw new Error(j.error||'HTTP '+r.status);
+      const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      $('status').innerHTML=`<b>Saved ${t}</b> · ${j.mode||'ok'} row for ${payload.month}`;
+      btn.classList.add('done');btn.textContent='✓ Saved';
+      setTimeout(()=>{btn.disabled=false;btn.classList.remove('done');btn.textContent='Save Month'},2500);
+      await loadHistory();
+    }catch(e){
+      $('status').innerHTML=`<b>Save failed</b> · ${e.message||e}`;
+      btn.disabled=false;
+    }
+  }
+
+  $('submitBtn').addEventListener('click',submit);
+  $('monthSel').addEventListener('change',loadHistory);
+  buildMonthOptions();
+  loadHistory();
+</script>
+</body>
+</html>
