@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GOH Dashboard</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  CLIENT DASHBOARD TEMPLATE
+  Per-client setup steps:
+    1) Change the two lines marked  ⚑ CLIENT CONFIG  below (title + brand text)
+    2) Deploy to Vercel — see README-template.md
+    3) Client opens dashboard → Settings → connects their 3 Sheets
+       (Cash Collected / Setter EOD / Closer EOD), maps columns per metric.
+       Their config saves to /api/config on their own Vercel project.
+  ═══════════════════════════════════════════════════════════════════
+-->
+<title>Client Name · Dashboard</title>  <!-- ⚑ CLIENT CONFIG: page title -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -84,6 +95,28 @@
   .biedit .cb-row input{cursor:pointer;accent-color:#d8a94f}
   .biedit .actions{display:flex;gap:8px;margin-top:22px;justify-content:flex-end}
   .biedit .actions .btn.primary{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
+  /* Tab manager modal */
+  .tabmgr-back{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:100}
+  .tabmgr-back.open{display:flex}
+  .tabmgr{background:#14110c;border:1px solid #352a1e;border-radius:14px;padding:22px 24px;max-width:560px;width:92%;max-height:88vh;overflow:auto;box-shadow:0 22px 64px rgba(0,0,0,.55)}
+  .tabmgr h3{margin:0 0 6px;font-size:14px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold)}
+  .tabmgr .hint{font-size:12px;color:var(--muted2);margin-bottom:16px;letter-spacing:.2px;line-height:1.5}
+  .tabmgr-list{display:flex;flex-direction:column;gap:8px}
+  .tabmgr-row{display:flex;align-items:center;gap:8px;padding:9px 10px;background:#1c1812;border:1px solid #352a1e;border-radius:8px}
+  .tabmgr-row .move{display:flex;flex-direction:column;gap:2px}
+  .tabmgr-row .move .btn{padding:1px 8px;font-size:11px;line-height:1;min-width:auto;background:#0f0d09;color:var(--muted);border:1px solid #352a1e}
+  .tabmgr-row .move .btn:hover{color:var(--gold);border-color:rgba(216,169,79,.4)}
+  .tabmgr-row .move .btn:disabled{opacity:.3;cursor:default}
+  .tabmgr-row input[type="text"]{flex:1;background:#0f0d09;color:var(--txt);border:1px solid #352a1e;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  .tabmgr-row input[type="text"]:focus{outline:none;border-color:rgba(216,169,79,.55)}
+  .tabmgr-row .badge-kind{font-size:9.5px;color:var(--muted2);letter-spacing:.4px;text-transform:uppercase;padding:3px 6px;background:#0f0d09;border-radius:4px}
+  .tabmgr-row .btn.del{color:#f87171;border-color:rgba(248,113,113,.25);background:#1c1812;padding:6px 10px;font-size:11px}
+  .tabmgr-row .btn.del:hover{background:rgba(248,113,113,.1)}
+  .tabmgr .actions{display:flex;gap:8px;margin-top:20px;justify-content:flex-end}
+  .tabmgr .actions .btn.primary{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
+  /* Small gear button in the nav that opens the manager */
+  .tab.mgrbtn{background:transparent;color:var(--muted);border:none;padding:0 10px;cursor:pointer;font-size:14px;display:flex;align-items:center}
+  .tab.mgrbtn:hover{color:var(--gold)}
   .tables{display:grid;grid-template-columns:1fr 1fr;gap:18px}
   @media(max-width:980px){.tables{grid-template-columns:1fr}}
   .tbl-card{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow:hidden}
@@ -182,12 +215,13 @@ body.editing .edit-only{display:inline-flex}
 <body>
 <nav>
   <div class="nav-in">
-    <div class="brand">GOH <span class="dia">◆</span> Dashboard</div>
+    <div class="brand">CLIENT <span class="dia">◆</span> Dashboard</div>  <!-- ⚑ CLIENT CONFIG: brand text (shown top-left in nav) -->
     <div class="tabs">
       <div class="tab active" data-page="ceo"><span class="dia">◆</span> CEO</div>
       <div class="tab" data-page="setter"><span class="dia">◆</span> Setter</div>
       <div class="tab" data-page="closer"><span class="dia">◆</span> Closer</div>
       <div class="tab addtab" id="addTabBtn" title="Add a custom tab">+ Tab</div>
+      <div class="tab mgrbtn" id="manageTabsBtn" title="Rename or reorder tabs">⚙</div>
     </div>
     <div class="nav-ctrl">
       <select class="sel" id="preset">
@@ -289,7 +323,7 @@ async function saveSharedCfg(){
       body:JSON.stringify({config:CFG,token:CFG.token||""})});
   }catch(e){/* if server save fails, local cache still holds it for this browser */}
 }
-let CFG={demo:true,goal:"",token:"",sources:[],map:{},closesSrc:{},plansSrc:{}};
+let CFG={demo:false,goal:"",token:"",sources:[],map:{},closesSrc:{},plansSrc:{}};
 try{const s=store.get("kpi_cfg2");if(s)CFG=Object.assign(CFG,JSON.parse(s))}catch(e){}
 CFG.sources=CFG.sources||[];CFG.map=CFG.map||{};CFG.closesSrc=CFG.closesSrc||{};CFG.plansSrc=CFG.plansSrc||{};
 
@@ -707,13 +741,14 @@ function cFmt(v,fmt){return fmtValue(v,fmt,false)}
 /* ===================== TAB FILTER (by setter/closer name) ===================== */
 // Per-tab label shown next to the dropdown. Drives UI text only.
 const TAB_FILTER_LABEL={setter:"Setter",ceo:"Setter",closer:"Closer"};
+const NAME_RX=/^(closer|setter|name|submitted by)$|what'?s your name|your name|setter name|closer name/i;
 // Locate the "name" column on a tab's source. Uses any mapped metric's source
-// and finds a header that looks like a person-name field. Matches the common
-// patterns we've seen across the team's forms: "What's your name?", "Closer",
-// "Setter", "Name", "Submitted By", etc.
+// for built-in tabs, OR any widget's source for custom tabs, and finds a
+// header that looks like a person-name field. Matches "What's your name?",
+// "Closer", "Setter", "Name", "Submitted By", etc.
 function findNameCol(tab){
   const defs=TABMETRICS[tab]||[];
-  const NAME_RX=/^(closer|setter|name|submitted by)$|what'?s your name|your name|setter name|closer name/i;
+  // Built-in tab: check metric mappings first
   for(const [id] of defs){
     const m=CFG.map[tab+"."+id];
     if(m&&m.src&&SRC[m.src]){
@@ -721,7 +756,21 @@ function findNameCol(tab){
       if(col)return{src:m.src,col};
     }
   }
+  // Custom tab (or built-in tab with unmapped metrics): check widget sources
+  const widgets=(CFG.widgets||[]).filter(w=>w.tab===tab&&w.src&&SRC[w.src]);
+  for(const w of widgets){
+    const col=SRC[w.src].headers.find(h=>NAME_RX.test(h));
+    if(col)return{src:w.src,col};
+  }
   return null;
+}
+// Label for the filter dropdown on this tab. Built-in tabs have explicit
+// labels; custom tabs derive from the detected column ("Closer" if the col
+// name contains "closer", otherwise "Setter").
+function getTabFilterLabel(tab){
+  if(TAB_FILTER_LABEL[tab])return TAB_FILTER_LABEL[tab];
+  const nc=findNameCol(tab);if(!nc)return null;
+  return /closer/i.test(nc.col)?"Closer":"Setter";
 }
 // Unique non-empty values from the name column, sorted alphabetically.
 // Scoped to the current date range so old setters/closers who haven't submitted
@@ -731,10 +780,16 @@ function getFilterOptions(tab,from,to){
   const nc=findNameCol(tab);if(!nc)return [];
   const src=SRC[nc.src];if(!src)return [];
   let dateCol=null;
+  // For built-in tabs, use the mapped dateCol. For custom tabs, use any
+  // widget on this tab whose src matches the name col's source.
   const defs=TABMETRICS[tab]||[];
   for(const [id] of defs){
     const m=CFG.map[tab+"."+id];
     if(m&&m.src===nc.src&&m.dateCol){dateCol=resolveCol(src,m.dateCol);break}
+  }
+  if(!dateCol){
+    const w=(CFG.widgets||[]).find(w=>w.tab===tab&&w.src===nc.src&&w.dateCol);
+    if(w)dateCol=resolveCol(src,w.dateCol);
   }
   const set=new Set();
   src.rows.forEach(r=>{
@@ -746,7 +801,7 @@ function getFilterOptions(tab,from,to){
 }
 // Returns {value, rowFilter} for the active filter on this tab, or null.
 function getTabFilter(tab){
-  if(!TAB_FILTER_LABEL[tab])return null;
+  if(!getTabFilterLabel(tab))return null;
   let value="";try{value=localStorage.getItem("kpi_filter_"+tab)||""}catch(e){}
   value=(value||"").trim();if(!value)return null;
   const nc=findNameCol(tab);if(!nc)return null;
@@ -978,11 +1033,14 @@ function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheet
 function rerenderTabWidgets(tabId){renderTab(tabId)}
 function fullRender(){["ceo","setter","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
 
-// Renders the per-tab filter dropdown. Picks the right host element + label
-// based on the tab. Tabs without an entry in TAB_FILTER_LABEL get no dropdown.
+// Renders the per-tab filter dropdown. Any tab where a name column can be
+// detected (built-in OR custom) will show a filter. For built-in tabs the
+// host element is hardcoded in HTML; for custom tabs it's added in
+// syncCustomTabsUI. If no name column is found, no dropdown appears.
 function renderTabFilter(tab,from,to){
-  const label=TAB_FILTER_LABEL[tab];if(!label)return;
+  const label=getTabFilterLabel(tab);
   const host=document.getElementById(tab+"FilterHost");if(!host)return;
+  if(!label){host.innerHTML="";return}
   const opts=getFilterOptions(tab,from,to);
   const current=(getTabFilter(tab)||{}).value||"";
   if(!opts.length){
@@ -1014,20 +1072,143 @@ function syncCustomTabsUI(){
     if(addB)tabsBar.insertBefore(btn,addB);else tabsBar.appendChild(btn);
     const page=document.createElement("div");page.className="page";page.id="page-"+t.id;page.dataset.custom="1";
     page.innerHTML=`<div class="hero"><h1>${esc(t.name)} <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
-      <div class="phead" style="margin:32px 0 18px"><div style="flex:1"></div>
-      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn edit-only" data-reset="${t.id}">Reset Layout</button><button class="btn" data-renametab="${t.id}">Rename</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
+      <div class="phead" style="margin:32px 0 18px">
+      <div style="flex:1" class="tab-filter" id="${t.id}FilterHost"></div>
+      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn edit-only" data-reset="${t.id}">Reset Layout</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
       <div class="customHost"></div>`;
     main.appendChild(page);
   });
+  applyTabOrder();
+  applyTabLabels();
   wireTabClicks();
 }
+
+/* ═══════════════ TAB CUSTOMIZATION ═══════════════
+ * CFG.tabLabels[id]  → optional custom display name (overrides built-in default or custom tab's own name)
+ * CFG.tabOrder       → array of tab IDs in desired left-to-right order (defaults to hardcoded, then custom in creation order)
+ */
+const BUILTIN_TAB_DEFAULTS={ceo:"CEO",setter:"Setter",closer:"Closer"};
+function defaultTabName(id){
+  if(BUILTIN_TAB_DEFAULTS[id])return BUILTIN_TAB_DEFAULTS[id];
+  const c=(CFG.customTabs||[]).find(t=>t.id===id);
+  return c?c.name:id;
+}
+function displayTabName(id){return (CFG.tabLabels&&CFG.tabLabels[id])||defaultTabName(id)}
+// Reorder the .tab elements in the DOM according to CFG.tabOrder.
+// Tabs not in the order stay at their default position (before the + / gear buttons).
+function applyTabOrder(){
+  const order=CFG.tabOrder||[];
+  if(!order.length)return;
+  const bar=document.querySelector(".tabs");
+  const addBtn=document.getElementById("addTabBtn");
+  order.forEach(id=>{
+    const tab=document.querySelector(`.tab[data-page="${id}"]`);
+    if(tab)bar.insertBefore(tab,addBtn);
+  });
+}
+// Update tab button text + page hero titles to reflect CFG.tabLabels.
+function applyTabLabels(){
+  document.querySelectorAll(".tab[data-page]").forEach(tab=>{
+    tab.innerHTML=`<span class="dia">◆</span> ${esc(displayTabName(tab.dataset.page))}`;
+  });
+  const allIds=[...Object.keys(BUILTIN_TAB_DEFAULTS),...(CFG.customTabs||[]).map(t=>t.id)];
+  allIds.forEach(id=>{
+    const h=document.querySelector(`#page-${id} .hero h1`);
+    if(h)h.innerHTML=`${esc(displayTabName(id))} <span class="gold">Dashboard</span>`;
+  });
+}
+
+/* ═══════════════ TAB MANAGER MODAL ═══════════════ */
+function openTabManager(){
+  const back=document.getElementById("tabmgrBack");
+  const list=document.getElementById("tabmgrList");
+  // Build the current tab order (default = built-in first, then custom)
+  const defaultOrder=[...Object.keys(BUILTIN_TAB_DEFAULTS),...(CFG.customTabs||[]).map(t=>t.id)];
+  const savedOrder=CFG.tabOrder||[];
+  // Merge: use saved order, then append any new tabs not yet in it
+  const currentOrder=[...savedOrder.filter(id=>defaultOrder.includes(id)),...defaultOrder.filter(id=>!savedOrder.includes(id))];
+  list.innerHTML=currentOrder.map(id=>{
+    const isBuiltin=!!BUILTIN_TAB_DEFAULTS[id];
+    const label=displayTabName(id);
+    return `<div class="tabmgr-row" data-id="${id}" data-builtin="${isBuiltin?1:0}">
+      <div class="move">
+        <button class="btn" data-move="up" title="Move up">↑</button>
+        <button class="btn" data-move="down" title="Move down">↓</button>
+      </div>
+      <input type="text" value="${esc(label)}" placeholder="${esc(defaultTabName(id))}">
+      ${isBuiltin?'<span class="badge-kind">built-in</span>':'<button class="btn del" data-mgr-delete>Delete</button>'}
+    </div>`;
+  }).join("");
+  refreshMoveButtons();
+  wireTabManagerRow();
+  back.classList.add("open");
+}
+function refreshMoveButtons(){
+  const rows=document.querySelectorAll("#tabmgrList .tabmgr-row");
+  rows.forEach((row,i)=>{
+    const up=row.querySelector('[data-move="up"]');
+    const dn=row.querySelector('[data-move="down"]');
+    if(up)up.disabled=(i===0);
+    if(dn)dn.disabled=(i===rows.length-1);
+  });
+}
+function wireTabManagerRow(){
+  document.querySelectorAll("#tabmgrList .tabmgr-row").forEach(row=>{
+    row.querySelector('[data-move="up"]').onclick=()=>{
+      const prev=row.previousElementSibling;
+      if(prev)row.parentNode.insertBefore(row,prev);
+      refreshMoveButtons();
+    };
+    row.querySelector('[data-move="down"]').onclick=()=>{
+      const next=row.nextElementSibling;
+      if(next)row.parentNode.insertBefore(next,row);
+      refreshMoveButtons();
+    };
+    const del=row.querySelector("[data-mgr-delete]");
+    if(del)del.onclick=()=>{
+      if(confirm(`Delete "${displayTabName(row.dataset.id)}" and all its widgets? This can't be undone.`)){
+        row.remove();
+        refreshMoveButtons();
+      }
+    };
+  });
+}
+function saveTabManager(){
+  const rows=[...document.querySelectorAll("#tabmgrList .tabmgr-row")];
+  const newOrder=rows.map(r=>r.dataset.id);
+  const newLabels={};
+  rows.forEach(r=>{
+    const id=r.dataset.id;
+    const input=r.querySelector('input[type="text"]');
+    const val=(input.value||"").trim();
+    // Only store a label if it differs from the default — keeps CFG clean.
+    if(val&&val!==defaultTabName(id))newLabels[id]=val;
+  });
+  // Delete any custom tabs whose rows are no longer present
+  const currentCustomIds=(CFG.customTabs||[]).map(t=>t.id);
+  const keptIds=new Set(newOrder);
+  const removedCustom=currentCustomIds.filter(id=>!keptIds.has(id));
+  if(removedCustom.length){
+    CFG.customTabs=(CFG.customTabs||[]).filter(t=>keptIds.has(t.id));
+    CFG.widgets=(CFG.widgets||[]).filter(w=>keptIds.has(w.tab)||BUILTIN_TAB_DEFAULTS[w.tab]);
+    removedCustom.forEach(id=>{if(CFG.order)delete CFG.order[id]});
+  }
+  CFG.tabOrder=newOrder;
+  CFG.tabLabels=newLabels;
+  saveSharedCfg();
+  document.getElementById("tabmgrBack").classList.remove("open");
+  // If any custom tabs were removed, rebuild them; otherwise just reapply order/labels.
+  if(removedCustom.length){syncCustomTabsUI();fullRender();document.querySelector('.tab[data-page="ceo"]').click()}
+  else{applyTabOrder();applyTabLabels()}
+}
+
 function wireTabClicks(){
   document.querySelectorAll(".tab:not(.addtab)").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
     document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));const pg=document.getElementById("page-"+t.dataset.page);if(pg)pg.classList.add("active");window.scrollTo({top:0,behavior:"smooth"})});
   const addBtn=document.getElementById("addTabBtn");if(addBtn)addBtn.onclick=addCustomTab;
   document.querySelectorAll("[data-addwidget]").forEach(b=>b.onclick=()=>openWidgetBuilder(b.dataset.addwidget,null));
   document.querySelectorAll("[data-reset]").forEach(b=>b.onclick=()=>{if(confirm("Reset this tab to default layout? Your custom widgets stay; only the order of built-in tiles is reset.")){resetTabLayout(b.dataset.reset)}});
-  document.querySelectorAll("[data-renametab]").forEach(b=>b.onclick=()=>{const t=(CFG.customTabs||[]).find(x=>x.id===b.dataset.renametab);const n=prompt("Tab name:",t.name);if(n&&n.trim()){t.name=n.trim();saveSharedCfg();syncCustomTabsUI();fullRender()}});
+  document.querySelectorAll("[data-renametab]").forEach(b=>b.onclick=()=>{const id=b.dataset.renametab;const cur=displayTabName(id);const n=prompt("Tab name:",cur);if(n&&n.trim()){CFG.tabLabels=CFG.tabLabels||{};if(n.trim()===defaultTabName(id))delete CFG.tabLabels[id];else CFG.tabLabels[id]=n.trim();saveSharedCfg();applyTabLabels()}});
   document.querySelectorAll("[data-deltab]").forEach(b=>b.onclick=()=>{if(confirm("Delete this tab and its widgets?")){
     const tid=b.dataset.deltab;
     CFG.customTabs=(CFG.customTabs||[]).filter(x=>x.id!==tid);
@@ -1320,11 +1501,27 @@ function captureTab(tab){
     CFG.plansSrc={src:g(".pl-src"),nameCol:g(".pl-name"),dueCol:g(".pl-due"),statusCol:g(".pl-status"),amountCol:g(".pl-amount")};return}
   if(!TABMETRICS[tab])return; // custom tabs manage widgets directly, nothing to capture
   document.querySelectorAll("#mapList .maprow").forEach(row=>{const id=row.dataset.id;if(!id)return;
-    const src=row.querySelector(".m-src").value,col=row.querySelector(".m-col").value,dc=row.querySelector(".m-date").value;
+    const src=row.querySelector(".m-src").value,col=row.querySelector(".m-col").value;
+    // If the user didn't touch the date column dropdown (common — most people
+    // just pick source + column and don't realize date is a separate field),
+    // auto-fill it with the source's first date-like column. Otherwise the
+    // save condition `src && col && dc` fails and the mapping is dropped.
+    let dc=row.querySelector(".m-date").value;
+    if(src&&!dc)dc=firstDateCol(src);
     const key=tab+"."+id;if(src&&col&&dc)CFG.map[key]={src,col,dateCol:dc};else delete CFG.map[key]});
 }
 function initEvents(){
   wireTabClicks();
+  // Wire the Manage Tabs modal
+  const mgrBtn=document.getElementById("manageTabsBtn");
+  if(mgrBtn)mgrBtn.onclick=openTabManager;
+  const mgrBack=document.getElementById("tabmgrBack");
+  document.getElementById("tabmgrSave").onclick=saveTabManager;
+  document.getElementById("tabmgrCancel").onclick=()=>mgrBack.classList.remove("open");
+  mgrBack.onclick=e=>{if(e.target===mgrBack)mgrBack.classList.remove("open")};
+  // Apply saved order + labels once on first paint so a shared config takes
+  // effect for anyone opening the dashboard, not just after they change something.
+  applyTabOrder();applyTabLabels();
   // Delegated widget controls — works for both built-in and custom widgets.
   document.body.addEventListener("click",e=>{
     const b=e.target.closest(".wbtn");if(!b)return;
@@ -1404,6 +1601,18 @@ window.addEventListener("load",boot);
       <button class="btn" id="biEditReset">Reset to Default</button>
       <button class="btn" id="biEditCancel">Cancel</button>
       <button class="btn primary" id="biEditSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="tabmgr-back" id="tabmgrBack">
+  <div class="tabmgr">
+    <h3>Manage Tabs</h3>
+    <p class="hint">Rename any tab, or use ↑ ↓ to reorder. Built-in tabs (CEO, Setter, Closer) can only be renamed; custom tabs can also be deleted. Changes save and sync to every device.</p>
+    <div class="tabmgr-list" id="tabmgrList"></div>
+    <div class="actions">
+      <button class="btn" id="tabmgrCancel">Cancel</button>
+      <button class="btn primary" id="tabmgrSave">Save</button>
     </div>
   </div>
 </div>
