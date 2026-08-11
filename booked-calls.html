@@ -76,7 +76,7 @@
   <div class="hero">
     <div>
       <h1>Booked <span class="gold">Calls</span></h1>
-      <div class="subline">Real-time from Calendly · edit qualification and source inline</div>
+      <div class="subline">Calls booked on this date · edit qualification and source inline</div>
     </div>
     <div class="controls">
       <input type="date" id="dateInput">
@@ -91,7 +91,7 @@
     <table>
       <thead>
         <tr>
-          <th>Time</th>
+          <th>Call Date/Time</th>
           <th>Name</th>
           <th>Email</th>
           <th>Instagram</th>
@@ -113,9 +113,11 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-  // Source dropdown options — extend as new UTM values appear organically.
-  // Anything present in a row that's not in this list is preserved and shown.
-  const SOURCE_OPTIONS = ["direct", "youtube", "instagram", "tiktok", "twitter", "linkedin", "facebook", "google", "newsletter", "referral", "other"];
+  // Source dropdown options — the specific UTM sources you track. Any value
+  // from Calendly's utm_source not in this list is preserved and shown as-is
+  // (so if a booking comes in with utm_source=facebook, "facebook" appears in
+  // the dropdown for that row without erasing your preset list).
+  const SOURCE_OPTIONS = ["youtube", "tom", "ayoub", "instagram", "ads", "referral", "direct"];
 
   function todayUK() {
     const parts = new Intl.DateTimeFormat("en-GB", {
@@ -133,27 +135,41 @@
     setTimeout(() => f.classList.remove("show"), 1500);
   }
 
-  // Strip the date prefix from "YYYY-MM-DD HH:mm" → "HH:mm" for the table
-  function timeOnly(dt) {
-    const m = String(dt || "").match(/\d{2}:\d{2}$/);
-    return m ? m[0] : dt || "";
+  // Format "YYYY-MM-DD HH:mm" as "12 Aug · 14:30" for compact display in the table.
+  // We show BOTH the date and time in the call column because you're now
+  // filtering by BOOKING date, so a call could be days or weeks in the future.
+  function fmtCallDT(dt) {
+    const s = String(dt || "").trim();
+    if (!s) return "—";
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
+    if (!m) return s;
+    const [, y, mo, d, hm] = m;
+    const dateObj = new Date(+y, +mo - 1, +d);
+    const monthLbl = dateObj.toLocaleDateString("en-GB", { month: "short" });
+    return `${+d} ${monthLbl} · ${hm}`;
   }
 
   // Instagram handles may be with or without "@" — display clean, link to profile.
   function igLink(handle) {
-    if (!handle) return '<span style="color:var(--muted2)">—</span>';
-    const clean = handle.replace(/^@/, "").split(/[/?]/)[0];
+    const h = String(handle || "").trim();
+    if (!h) return '<span style="color:var(--muted2)">—</span>';
+    const clean = h.replace(/^@/, "").split(/[/?]/)[0];
     if (!clean) return '<span style="color:var(--muted2)">—</span>';
     return `<a href="https://instagram.com/${encodeURIComponent(clean)}" target="_blank" rel="noopener">@${esc(clean)}</a>`;
   }
   function telLink(phone) {
-    if (!phone) return '<span style="color:var(--muted2)">—</span>';
-    const clean = phone.replace(/[^\d+]/g, "");
-    return `<a href="tel:${esc(clean)}">${esc(phone)}</a>`;
+    // Defensive — Calendly phone_number answers can occasionally arrive as
+    // objects or nulls; String() coerces everything safely.
+    const p = String(phone || "").trim();
+    if (!p) return '<span style="color:var(--muted2)">—</span>';
+    const clean = p.replace(/[^\d+]/g, "");
+    if (!clean) return `<span>${esc(p)}</span>`;
+    return `<a href="tel:${esc(clean)}">${esc(p)}</a>`;
   }
   function mailLink(email) {
-    if (!email) return "";
-    return `<a href="mailto:${esc(email)}">${esc(email)}</a>`;
+    const e = String(email || "").trim();
+    if (!e) return "";
+    return `<a href="mailto:${esc(e)}">${esc(e)}</a>`;
   }
 
   function sourceSelect(current, calendlyId) {
@@ -192,13 +208,13 @@
   function renderRows(rows) {
     const tbody = $("tbody");
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">No calls booked</div>Nothing on the calendar for ${$("dateInput").value}. New bookings will appear here automatically.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">No calls booked</div>Nothing was booked on ${$("dateInput").value}. New bookings will appear here automatically.</div></td></tr>`;
       return;
     }
     tbody.innerHTML = rows.map(r => {
       const id = r["Calendly ID"] || "";
       return `<tr>
-        <td class="time">${esc(timeOnly(r["Call Time"]))}</td>
+        <td class="time">${esc(fmtCallDT(r["Call Time"]))}</td>
         <td class="name">${esc(r.Name)}</td>
         <td class="contact">${mailLink(r.Email)}</td>
         <td class="contact">${igLink(r.Instagram)}</td>
