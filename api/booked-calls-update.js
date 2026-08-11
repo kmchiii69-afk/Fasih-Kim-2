@@ -34,6 +34,15 @@ function colLetter(n) {
   return s;
 }
 
+// See calendly-webhook.js. Prefixes formula-triggering values with an
+// apostrophe so a Notes entry like "= see call recording" writes as plain
+// text instead of parsing as a broken formula.
+function safeCell(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST" && req.method !== "PUT" && req.method !== "PATCH") {
@@ -86,7 +95,7 @@ export default async function handler(req, res) {
       if (colIdx < 0) return null;
       return {
         range: `${quotedTab}!${colLetter(colIdx)}${rowNumber}`,
-        values: [[val == null ? "" : val]],
+        values: [[safeCell(val)]],
       };
     }).filter(Boolean);
 

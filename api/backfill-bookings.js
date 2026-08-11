@@ -39,6 +39,14 @@ function getAuth() {
 
 function quoteTab(t) { return `'${String(t).replace(/'/g, "''")}'`; }
 
+// See calendly-webhook.js — prevents phone numbers and other +/=/-/@-prefixed
+// values from being interpreted as formulas by Google Sheets.
+function safeCell(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
@@ -219,7 +227,7 @@ export default async function handler(req, res) {
           "" /* Qualified */,
           inv.uri,
           "" /* Notes */,
-        ]);
+        ].map(safeCell));
         existingIds.add(inv.uri); // avoid duplicating within this same backfill run
       }
     }

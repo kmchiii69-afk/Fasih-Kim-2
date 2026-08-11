@@ -84,6 +84,16 @@ function getAuth() {
 
 function quoteTab(t) { return `'${String(t).replace(/'/g, "''")}'`; }
 
+// Escape values that Google Sheets would otherwise interpret as a formula.
+// Any cell starting with =, +, -, or @ triggers formula parsing — so phone
+// numbers like "+15551234567" become #ERROR! Prefix with an apostrophe: it's
+// Sheets' invisible "this is text" marker (stripped from the displayed value).
+function safeCell(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
@@ -272,7 +282,7 @@ export default async function handler(req, res) {
     const row = [
       bookingTime, callTime, name, email, instagram,
       phone, revenue, source, "" /* Qualified */, inviteeUri, "" /* Notes */,
-    ];
+    ].map(safeCell);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
