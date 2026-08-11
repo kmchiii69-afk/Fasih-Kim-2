@@ -55,17 +55,19 @@ export default async function handler(req, res) {
     if (values.length < 2) return send(res, 200, { date: targetDate, rows: [] });
 
     const headers = values[0].map(h => String(h).trim());
-    const callTimeIdx = headers.indexOf("Call Time");
+    const bookingTimeIdx = headers.indexOf("Booking Time");
 
-    // Match on "Call Time" starting with the target date (format is "YYYY-MM-DD HH:mm")
+    // Match on "Booking Time" starting with the target date — i.e. "when the
+    // call was booked" rather than "when the call happens". The date picker
+    // shows you the bookings that came in on that day.
     const rows = values.slice(1)
-      .filter(r => String(r[callTimeIdx] || "").startsWith(targetDate))
+      .filter(r => String(r[bookingTimeIdx] || "").startsWith(targetDate))
       .map((r, i) => {
-        const o = { _rowNumber: values.indexOf(r) + 1 }; // 1-indexed sheet row
+        const o = { _rowNumber: values.indexOf(r) + 1 };
         headers.forEach((h, j) => { o[h] = r[j] !== undefined ? r[j] : ""; });
         return o;
       })
-      // Sort by call time ascending
+      // Sort by call time ascending so upcoming calls appear in chronological order
       .sort((a, b) => String(a["Call Time"]).localeCompare(String(b["Call Time"])));
 
     return send(res, 200, { date: targetDate, rows });
