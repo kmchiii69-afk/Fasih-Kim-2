@@ -41,6 +41,33 @@
   .stat.qualified .val{color:var(--green)}
   .stat.disqualified .val{color:var(--red)}
   .stat.pending .val{color:var(--gold)}
+  .filter-row{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap;padding:12px 14px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+  .filter-row .flabel{font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-right:2px}
+  .filter-row select{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;min-width:120px}
+  .filter-row select:focus{outline:none;border-color:rgba(216,169,79,.55)}
+  .filter-row .clear-filters{background:transparent;color:var(--muted);border:none;font-size:11.5px;cursor:pointer;font-family:inherit;letter-spacing:.3px;margin-left:auto;padding:6px 10px}
+  .filter-row .clear-filters:hover{color:var(--gold)}
+  .filter-row .active-count{color:var(--gold);font-size:11px;font-weight:600;letter-spacing:.3px}
+  /* Add booking modal */
+  .add-btn{background:var(--grad-gold);color:#241803;border:none;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:700;letter-spacing:.4px;cursor:pointer;font-family:inherit}
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:200;padding:24px}
+  .modal-back.open{display:flex}
+  .modal{background:#14110c;border:1px solid #352a1e;border-radius:14px;padding:26px 28px;max-width:520px;width:100%;max-height:90vh;overflow:auto}
+  .modal h3{color:var(--gold);font-size:15px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;font-weight:700}
+  .modal .modal-sub{color:var(--muted2);font-size:12px;margin-bottom:20px;letter-spacing:.2px}
+  .modal .field{margin-bottom:14px}
+  .modal .field label{display:block;font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:6px}
+  .modal .field label .req{color:var(--red);margin-left:3px}
+  .modal input[type="text"],.modal input[type="email"],.modal input[type="datetime-local"],.modal select,.modal textarea{width:100%;background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;color-scheme:dark}
+  .modal input:focus,.modal select:focus,.modal textarea:focus{outline:none;border-color:rgba(216,169,79,.55)}
+  .modal textarea{resize:vertical;min-height:60px}
+  .modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .modal .btn-cancel{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .modal .btn-cancel:hover{color:var(--txt);border-color:var(--gold)}
+  .modal .btn-primary{background:var(--grad-gold);color:#241803;border:none;border-radius:8px;padding:8px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .modal .btn-primary:disabled{opacity:.55;cursor:default}
+  .modal .form-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px}
   .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-top:22px;overflow:hidden}
   table{width:100%;border-collapse:collapse;font-size:13px}
   thead{background:var(--panel-alt)}
@@ -89,12 +116,29 @@
       </div>
       <input type="date" id="dateInput">
       <input type="month" id="monthInput" style="display:none">
+      <button class="add-btn" id="addBtn">+ Add Booking</button>
       <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
       <span class="status" id="status"><span class="live-dot"></span>Auto-refresh 60s</span>
     </div>
   </div>
 
   <div class="summary" id="summary"></div>
+
+  <div class="filter-row" id="filterRow">
+    <span class="flabel">Source</span>
+    <select id="filterSource"><option value="">All</option></select>
+    <span class="flabel">Qualified</span>
+    <select id="filterQualified">
+      <option value="">All</option>
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+      <option value="pending">Pending</option>
+    </select>
+    <span class="flabel">Revenue</span>
+    <select id="filterRevenue"><option value="">All</option></select>
+    <span class="active-count" id="filterCount"></span>
+    <button class="clear-filters" id="clearFilters">Clear filters</button>
+  </div>
 
   <div class="table-wrap">
     <table>
@@ -113,6 +157,68 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-back" id="addModal">
+  <div class="modal">
+    <h3>Add Booking</h3>
+    <div class="modal-sub">Manually add a call that came in outside Calendly — DM, phone, referral, etc.</div>
+    <div class="field">
+      <label>Name <span class="req">*</span></label>
+      <input type="text" id="fName" placeholder="Full name">
+    </div>
+    <div class="field">
+      <label>Email <span class="req">*</span></label>
+      <input type="email" id="fEmail" placeholder="them@example.com">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Instagram</label>
+        <input type="text" id="fInstagram" placeholder="@handle">
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input type="text" id="fPhone" placeholder="+1 555…">
+      </div>
+    </div>
+    <div class="field">
+      <label>Current Revenue</label>
+      <input type="text" id="fRevenue" placeholder="e.g. $20,000 - $50,000">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Source</label>
+        <select id="fSource"></select>
+      </div>
+      <div class="field">
+        <label>Qualified</label>
+        <select id="fQualified">
+          <option value="">Pending</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Booking Time</label>
+        <input type="datetime-local" id="fBookingTime">
+      </div>
+      <div class="field">
+        <label>Call Time</label>
+        <input type="datetime-local" id="fCallTime">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="fNotes" placeholder="Anything worth remembering…"></textarea>
+    </div>
+    <div class="form-error" id="fError"></div>
+    <div class="actions">
+      <button class="btn-cancel" id="fCancel">Cancel</button>
+      <button class="btn-primary" id="fSave">Add Booking</button>
+    </div>
   </div>
 </div>
 
@@ -260,12 +366,13 @@
         grp.querySelectorAll(".qtbtn").forEach(b => b.classList.remove("active-yes", "active-no"));
         if (finalVal) btn.classList.add("active-" + finalVal);
         saveField(id, "qualified", finalVal).then(() => {
-          // Refresh summary counts without re-fetching everything
-          const rows = [...document.querySelectorAll("tbody tr")].map(tr => {
-            const q = tr.querySelector(".qtbtn.active-yes") ? "yes" : (tr.querySelector(".qtbtn.active-no") ? "no" : "");
-            return { Qualified: q };
-          });
-          renderSummary(rows);
+          // Update ALL_ROWS in place so filter counts / re-renders are correct.
+          const updated = ALL_ROWS.find(r => r["Calendly ID"] === id);
+          if (updated) updated.Qualified = finalVal;
+          // Re-render just the summary (don't blow away current rows / filters).
+          renderSummary(applyFilters());
+          $("filterCount").textContent = Object.values(FILTERS).filter(Boolean).length
+            ? `Showing ${applyFilters().length} of ${ALL_ROWS.length}` : "";
         });
       };
     });
@@ -288,6 +395,49 @@
 
   let mode = "day"; // "day" | "month"
   let loading = false;
+  let ALL_ROWS = []; // most recent fetch — filters run against this
+  const FILTERS = { source: "", qualified: "", revenue: "" };
+
+  // Populate the source + revenue dropdowns with unique values from the current
+  // dataset. Called after every fetch so options match what's actually there.
+  function rebuildFilterOptions(rows) {
+    const sources = [...new Set(rows.map(r => String(r.Source || "").trim()).filter(Boolean))].sort();
+    const revenues = [...new Set(rows.map(r => String(r["Current Revenue"] || "").trim()).filter(Boolean))].sort();
+    const setSel = (id, values, current) => {
+      const sel = $(id);
+      sel.innerHTML = `<option value="">All</option>` + values.map(v => `<option value="${esc(v)}"${v === current ? " selected" : ""}>${esc(v)}</option>`).join("");
+    };
+    setSel("filterSource", sources, FILTERS.source);
+    setSel("filterRevenue", revenues, FILTERS.revenue);
+    $("filterQualified").value = FILTERS.qualified;
+  }
+
+  // Return the subset of ALL_ROWS matching current filter state.
+  function applyFilters() {
+    return ALL_ROWS.filter(r => {
+      if (FILTERS.source && String(r.Source || "").trim() !== FILTERS.source) return false;
+      if (FILTERS.revenue && String(r["Current Revenue"] || "").trim() !== FILTERS.revenue) return false;
+      if (FILTERS.qualified) {
+        const q = String(r.Qualified || "").toLowerCase().trim();
+        // "pending" = no explicit yes/no
+        const actual = (q === "yes" || q === "no") ? q : "pending";
+        if (actual !== FILTERS.qualified) return false;
+      }
+      return true;
+    });
+  }
+
+  // Render summary + table using the currently-filtered view.
+  function renderFiltered() {
+    const filtered = applyFilters();
+    renderSummary(filtered);
+    renderRows(filtered);
+    // Show a count next to the filter row so it's clear something's applied.
+    const active = Object.values(FILTERS).filter(Boolean).length;
+    $("filterCount").textContent = active
+      ? `Showing ${filtered.length} of ${ALL_ROWS.length}`
+      : "";
+  }
 
   // Build the API URL based on the current mode + picker value.
   function buildLoadUrl() {
@@ -317,8 +467,9 @@
       const r = await fetch(buildLoadUrl());
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || "HTTP " + r.status);
-      renderSummary(j.rows || []);
-      renderRows(j.rows || []);
+      ALL_ROWS = j.rows || [];
+      rebuildFilterOptions(ALL_ROWS);
+      renderFiltered();
     } catch (e) {
       $("tbody").innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">Couldn't load calls</div>${esc(e.message || e)}</div></td></tr>`;
     } finally {
@@ -326,6 +477,20 @@
       $("refreshBtn").classList.remove("syncing");
     }
   }
+
+  // Wire up the filter dropdowns — change re-renders (no fetch).
+  ["filterSource", "filterQualified", "filterRevenue"].forEach(id => {
+    $(id).addEventListener("change", e => {
+      const key = id.replace("filter", "").toLowerCase();
+      FILTERS[key] = e.target.value;
+      renderFiltered();
+    });
+  });
+  $("clearFilters").addEventListener("click", () => {
+    FILTERS.source = FILTERS.qualified = FILTERS.revenue = "";
+    $("filterSource").value = $("filterQualified").value = $("filterRevenue").value = "";
+    renderFiltered();
+  });
 
   // Toggle handler — swap the picker and reload.
   function setMode(newMode) {
@@ -350,6 +515,73 @@
   // Auto-refresh every 60s so bookings appear without needing manual refresh.
   // Only refreshes if the page is currently visible — no wasted calls when tab is backgrounded.
   setInterval(() => { if (document.visibilityState === "visible") load(); }, 60_000);
+
+  /* ═══════════════ ADD BOOKING MODAL ═══════════════ */
+  function openAddModal() {
+    // Reset all form fields to a clean state
+    ["fName","fEmail","fInstagram","fPhone","fRevenue","fNotes"].forEach(id => $(id).value = "");
+    $("fQualified").value = "";
+    // Populate source dropdown with the standard preset options
+    $("fSource").innerHTML = SOURCE_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("fSource").value = "direct";
+    // Default booking time = now (input type=datetime-local wants YYYY-MM-DDTHH:mm)
+    const now = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    const nowLocal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    $("fBookingTime").value = nowLocal;
+    $("fCallTime").value = ""; // usually unknown for manual entries
+    $("fError").textContent = "";
+    $("fSave").disabled = false;
+    $("addModal").classList.add("open");
+    setTimeout(() => $("fName").focus(), 50);
+  }
+  function closeAddModal() { $("addModal").classList.remove("open"); }
+
+  async function saveNewBooking() {
+    const name = $("fName").value.trim();
+    const email = $("fEmail").value.trim();
+    if (!name && !email) {
+      $("fError").textContent = "Name or email is required.";
+      return;
+    }
+    $("fError").textContent = "";
+    $("fSave").disabled = true;
+
+    const payload = {
+      name, email,
+      instagram: $("fInstagram").value.trim(),
+      phone: $("fPhone").value.trim(),
+      revenue: $("fRevenue").value.trim(),
+      source: $("fSource").value,
+      qualified: $("fQualified").value,
+      bookingTime: $("fBookingTime").value,
+      callTime: $("fCallTime").value,
+      notes: $("fNotes").value.trim(),
+    };
+    try {
+      const r = await fetch("/api/booked-calls-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || "HTTP " + r.status);
+      closeAddModal();
+      flash("✓ Booking added");
+      // Reload data so the new row appears in the table
+      load();
+    } catch (e) {
+      $("fError").textContent = "Save failed: " + (e.message || e);
+      $("fSave").disabled = false;
+    }
+  }
+
+  $("addBtn").addEventListener("click", openAddModal);
+  $("fCancel").addEventListener("click", closeAddModal);
+  $("fSave").addEventListener("click", saveNewBooking);
+  // Close on backdrop click, Escape key
+  $("addModal").addEventListener("click", e => { if (e.target.id === "addModal") closeAddModal(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("addModal").classList.contains("open")) closeAddModal(); });
 </script>
 </body>
 </html>
