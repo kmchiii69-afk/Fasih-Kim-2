@@ -39,9 +39,23 @@ export default async function handler(req, res) {
     const tab = (process.env.BOOKED_CALLS_TAB || "Sheet1").trim();
     if (!sheetId) return send(res, 500, { error: "BOOKED_CALLS_SHEET_ID not set" });
 
-    // Date filter — either explicit ?date=YYYY-MM-DD, or "today" in UK time.
-    const targetDate = (req.query?.date && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date))
-      ? req.query.date : ukToday();
+    // Filter mode — either a single day or a whole month.
+    //   ?date=YYYY-MM-DD  → single day
+    //   ?month=YYYY-MM    → whole calendar month
+    //   (neither)         → today (UK)
+    const dateParam = req.query?.date;
+    const monthParam = req.query?.month;
+    let filterPrefix, filterLabel;
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      filterPrefix = monthParam;      // "2026-08" matches all "2026-08-*" rows
+      filterLabel = monthParam;
+    } else if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      filterPrefix = dateParam;
+      filterLabel = dateParam;
+    } else {
+      filterPrefix = ukToday();
+      filterLabel = filterPrefix;
+    }
 
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
@@ -52,25 +66,25 @@ export default async function handler(req, res) {
       dateTimeRenderOption: "FORMATTED_STRING",
     });
     const values = resp.data.values || [];
-    if (values.length < 2) return send(res, 200, { date: targetDate, rows: [] });
+    if (values.length < 2) return send(res, 200, { date: filterLabel, rows: [] });
 
     const headers = values[0].map(h => String(h).trim());
     const bookingTimeIdx = headers.indexOf("Booking Time");
 
-    // Match on "Booking Time" starting with the target date — i.e. "when the
-    // call was booked" rather than "when the call happens". The date picker
-    // shows you the bookings that came in on that day.
+    // Match on "Booking Time" starting with the prefix — YYYY-MM-DD for day,
+    // YYYY-MM for month. Both work because Booking Time values look like
+    // "2026-08-11 14:30".
     const rows = values.slice(1)
-      .filter(r => String(r[bookingTimeIdx] || "").startsWith(targetDate))
+      .filter(r => String(r[bookingTimeIdx] || "").startsWith(filterPrefix))
       .map((r, i) => {
         const o = { _rowNumber: values.indexOf(r) + 1 };
         headers.forEach((h, j) => { o[h] = r[j] !== undefined ? r[j] : ""; });
         return o;
       })
-      // Sort by call time ascending so upcoming calls appear in chronological order
-      .sort((a, b) => String(a["Call Time"]).localeCompare(String(b["Call Time"])));
+      // Sort by booking time descending — most recent bookings first
+      .sort((a, b) => String(b["Booking Time"]).localeCompare(String(a["Booking Time"])));
 
-    return send(res, 200, { date: targetDate, rows });
+    return send(res, 200, { date: filterLabel, rows });
   } catch (err) {
     return send(res, 500, { error: err && err.message ? err.message : String(err) });
   }
