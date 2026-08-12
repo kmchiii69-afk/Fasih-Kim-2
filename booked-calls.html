@@ -23,8 +23,12 @@
   h1{font-size:30px;font-weight:800;letter-spacing:-.5px}
   h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .subline{color:var(--muted);font-size:13px;margin-top:6px;letter-spacing:.3px}
-  .controls{display:flex;align-items:center;gap:10px}
-  .controls input[type="date"]{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;color-scheme:dark}
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .controls input[type="date"],.controls input[type="month"]{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;color-scheme:dark}
+  .mode-toggle{display:inline-flex;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:2px}
+  .mode-toggle button{background:transparent;color:var(--muted);border:none;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-radius:6px;letter-spacing:.3px;transition:all .15s}
+  .mode-toggle button:hover{color:var(--txt)}
+  .mode-toggle button.active{background:rgba(216,169,79,.15);color:var(--gold)}
   .refresh-btn{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
   .refresh-btn:hover{border-color:rgba(216,169,79,.55);color:var(--gold)}
   .refresh-btn.syncing{opacity:.5;pointer-events:none}
@@ -79,7 +83,12 @@
       <div class="subline">Calls booked on this date · edit qualification and source inline</div>
     </div>
     <div class="controls">
+      <div class="mode-toggle" id="modeToggle">
+        <button data-mode="day" class="active">Day</button>
+        <button data-mode="month">Month</button>
+      </div>
       <input type="date" id="dateInput">
+      <input type="month" id="monthInput" style="display:none">
       <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
       <span class="status" id="status"><span class="live-dot"></span>Auto-refresh 60s</span>
     </div>
@@ -208,7 +217,7 @@
   function renderRows(rows) {
     const tbody = $("tbody");
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">No calls booked</div>Nothing was booked on ${$("dateInput").value}. New bookings will appear here automatically.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">No calls booked</div>Nothing was booked in ${esc(currentLabel())}. New bookings will appear here automatically.</div></td></tr>`;
       return;
     }
     tbody.innerHTML = rows.map(r => {
@@ -277,13 +286,35 @@
     }
   }
 
+  let mode = "day"; // "day" | "month"
   let loading = false;
+
+  // Build the API URL based on the current mode + picker value.
+  function buildLoadUrl() {
+    if (mode === "month") {
+      const v = $("monthInput").value; // "YYYY-MM"
+      return "/api/booked-calls-read?month=" + encodeURIComponent(v);
+    }
+    return "/api/booked-calls-read?date=" + encodeURIComponent($("dateInput").value);
+  }
+
+  // Human-readable label of the current filter, used in the empty state message.
+  function currentLabel() {
+    if (mode === "month") {
+      const v = $("monthInput").value;
+      if (!v) return "this month";
+      const [y, m] = v.split("-");
+      return new Date(+y, +m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    }
+    return $("dateInput").value;
+  }
+
   async function load() {
     if (loading) return;
     loading = true;
     $("refreshBtn").classList.add("syncing");
     try {
-      const r = await fetch("/api/booked-calls-read?date=" + encodeURIComponent($("dateInput").value));
+      const r = await fetch(buildLoadUrl());
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || "HTTP " + r.status);
       renderSummary(j.rows || []);
@@ -296,8 +327,24 @@
     }
   }
 
+  // Toggle handler — swap the picker and reload.
+  function setMode(newMode) {
+    if (mode === newMode) return;
+    mode = newMode;
+    document.querySelectorAll("#modeToggle button").forEach(b => b.classList.toggle("active", b.dataset.mode === newMode));
+    $("dateInput").style.display = newMode === "day" ? "" : "none";
+    $("monthInput").style.display = newMode === "month" ? "" : "none";
+    load();
+  }
+  document.querySelectorAll("#modeToggle button").forEach(b => {
+    b.onclick = () => setMode(b.dataset.mode);
+  });
+
+  // Default values — today for the day picker, current month for month picker.
   $("dateInput").value = todayUK();
+  $("monthInput").value = todayUK().slice(0, 7);
   $("dateInput").addEventListener("change", load);
+  $("monthInput").addEventListener("change", load);
   $("refreshBtn").addEventListener("click", load);
   load();
   // Auto-refresh every 60s so bookings appear without needing manual refresh.
