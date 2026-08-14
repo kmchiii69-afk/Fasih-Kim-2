@@ -112,6 +112,8 @@
   .tabmgr-row .badge-kind{font-size:9.5px;color:var(--muted2);letter-spacing:.4px;text-transform:uppercase;padding:3px 6px;background:#0f0d09;border-radius:4px}
   .tabmgr-row .btn.del{color:#f87171;border-color:rgba(248,113,113,.25);background:#1c1812;padding:6px 10px;font-size:11px}
   .tabmgr-row .btn.del:hover{background:rgba(248,113,113,.1)}
+  .tabmgr-row.hidden-row{opacity:.55}
+  .tabmgr-row.hidden-row input[type="text"]{color:var(--muted2)}
   .tabmgr .actions{display:flex;gap:8px;margin-top:20px;justify-content:flex-end}
   .tabmgr .actions .btn.primary{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
   /* Small gear button in the nav that opens the manager */
@@ -438,29 +440,44 @@ function clearColCache() { _colCache.clear(); }
 // Read a cell using the resolved column name.
 function getCell(src, row, want) { return row[resolveCol(src, want)]; }
 
+// Compute the aggregated value for a widget spec. Supports single-source or
+// multi-source scorecards. For multi-source, spec.extra is an array of
+// { src, col, dateCol, sign } — each contribution is summed (or subtracted if
+// sign === "-") into the total. Only sum/avg aggs support multi-source;
+// count/ratio/math stay single-source.
 function cAgg(spec,from,to,rowFilter){
   const src=SRC[spec.src];if(!src)return null;
   const dateColR=spec.dateCol?resolveCol(src,spec.dateCol):null;
   const colR=spec.col?resolveCol(src,spec.col):null;
   const col2R=spec.col2?resolveCol(src,spec.col2):null;
-  const inRange=r=>{if(!dateColR)return true;const d=toDate(r[dateColR]);return d?inR(d,from,to):false};
-  const passes=r=>(!rowFilter||rowFilter(r,spec.src))&&inRange(r);
-  const rows=src.rows.filter(passes);
+  const inRange=(r,dc)=>{if(!dc)return true;const d=toDate(r[dc]);return d?inR(d,from,to):false};
+  const passes=(r,srcId,dc)=>(!rowFilter||rowFilter(r,srcId))&&inRange(r,dc);
+  const rows=src.rows.filter(r=>passes(r,spec.src,dateColR));
   const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
   const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
+  // Helper: sum an extra-source contribution against the current range/filter.
+  const sumExtra=extra=>{
+    const es=SRC[extra.src];if(!es||!extra.col)return 0;
+    const edc=extra.dateCol?resolveCol(es,extra.dateCol):null;
+    const ec=resolveCol(es,extra.col);
+    if(!ec)return 0;
+    const erows=es.rows.filter(r=>passes(r,extra.src,edc));
+    const total=erows.reduce((a,r)=>a+toNum(r[ec]),0);
+    return extra.sign==="-"?-total:total;
+  };
+  const extraTotal=Array.isArray(spec.extra)?spec.extra.reduce((a,e)=>a+sumExtra(e),0):0;
   if(spec.agg==="count")return cntCol(colR||dateColR||Object.keys(src.rows[0]||{})[0]);
   if(spec.agg==="avg"){
     // Daily average across the calendar window — sum / number of days in range.
-    // (Previously this was sum / non-empty-rows which was confusing for KPIs;
-    // e.g. "average follow-ups per day" should include weekends as zeros.)
+    // Multi-source: all contributions summed then divided by the same window.
     const days=Math.max(1,Math.floor((to.getTime()-from.getTime())/86400000)+1);
-    return sumCol(colR)/days;
+    return (sumCol(colR)+extraTotal)/days;
   }
   if(spec.agg==="avgPer"){const n=cntCol(colR);return n?sumCol(colR)/n:0} // legacy per-row average
   if(spec.agg==="ratio"){const b=sumCol(col2R);return b?sumCol(colR)/b:0}
   if(spec.agg==="math"){const A=sumCol(colR),B=col2R?sumCol(col2R):0;
     try{return Function("A","B","return ("+(spec.expr||"A")+")")(A,B)}catch(e){return 0}}
-  return sumCol(colR); // default sum
+  return sumCol(colR)+extraTotal; // default sum (with multi-source support)
 }
 function cFmt(v,fmt){return fmtValue(v,fmt,false)}
 // Daily series for a custom bar chart, respecting the date range.
@@ -1080,6 +1097,7 @@ function syncCustomTabsUI(){
   });
   applyTabOrder();
   applyTabLabels();
+  applyTabVisibility();
   wireTabClicks();
 }
 
@@ -1127,16 +1145,26 @@ function openTabManager(){
   const savedOrder=CFG.tabOrder||[];
   // Merge: use saved order, then append any new tabs not yet in it
   const currentOrder=[...savedOrder.filter(id=>defaultOrder.includes(id)),...defaultOrder.filter(id=>!savedOrder.includes(id))];
+  const hiddenTabs=new Set(CFG.hiddenTabs||[]);
   list.innerHTML=currentOrder.map(id=>{
     const isBuiltin=!!BUILTIN_TAB_DEFAULTS[id];
     const label=displayTabName(id);
-    return `<div class="tabmgr-row" data-id="${id}" data-builtin="${isBuiltin?1:0}">
+    const isHidden=hiddenTabs.has(id);
+    // Built-in tabs get a "Hide" toggle (reversible — same button flips back to
+    // "Show" when the tab is currently hidden). Custom tabs get "Delete"
+    // (destructive — removes the tab and its widgets).
+    const actionBtn=isBuiltin
+      ? `<button class="btn del" data-mgr-hide>${isHidden?"Show":"Hide"}</button>`
+      : `<button class="btn del" data-mgr-delete>Delete</button>`;
+    return `<div class="tabmgr-row${isHidden?' hidden-row':''}" data-id="${id}" data-builtin="${isBuiltin?1:0}" data-hidden="${isHidden?1:0}">
       <div class="move">
         <button class="btn" data-move="up" title="Move up">↑</button>
         <button class="btn" data-move="down" title="Move down">↓</button>
       </div>
       <input type="text" value="${esc(label)}" placeholder="${esc(defaultTabName(id))}">
-      ${isBuiltin?'<span class="badge-kind">built-in</span>':'<button class="btn del" data-mgr-delete>Delete</button>'}
+      ${isBuiltin?'<span class="badge-kind">built-in</span>':''}
+      ${isHidden?'<span class="badge-kind" style="background:#3a1e1e;color:#f87171">hidden</span>':''}
+      ${actionBtn}
     </div>`;
   }).join("");
   refreshMoveButtons();
@@ -1164,6 +1192,25 @@ function wireTabManagerRow(){
       if(next)row.parentNode.insertBefore(next,row);
       refreshMoveButtons();
     };
+    // Hide/Show for built-in tabs — toggles data-hidden and updates the button
+    // label. Row stays visible in the manager so it can be un-hidden later.
+    const hide=row.querySelector("[data-mgr-hide]");
+    if(hide)hide.onclick=()=>{
+      const nowHidden=row.dataset.hidden!=="1";
+      row.dataset.hidden=nowHidden?"1":"0";
+      row.classList.toggle("hidden-row",nowHidden);
+      hide.textContent=nowHidden?"Show":"Hide";
+      // Update or add the "hidden" badge inline
+      let badge=row.querySelector('.badge-kind[data-hidden-badge]');
+      if(nowHidden&&!badge){
+        badge=document.createElement("span");
+        badge.className="badge-kind";
+        badge.dataset.hiddenBadge="1";
+        badge.style.cssText="background:#3a1e1e;color:#f87171";
+        badge.textContent="hidden";
+        hide.parentNode.insertBefore(badge,hide);
+      }else if(!nowHidden&&badge){badge.remove()}
+    };
     const del=row.querySelector("[data-mgr-delete]");
     if(del)del.onclick=()=>{
       if(confirm(`Delete "${displayTabName(row.dataset.id)}" and all its widgets? This can't be undone.`)){
@@ -1177,12 +1224,15 @@ function saveTabManager(){
   const rows=[...document.querySelectorAll("#tabmgrList .tabmgr-row")];
   const newOrder=rows.map(r=>r.dataset.id);
   const newLabels={};
+  const newHidden=[];
   rows.forEach(r=>{
     const id=r.dataset.id;
     const input=r.querySelector('input[type="text"]');
     const val=(input.value||"").trim();
     // Only store a label if it differs from the default — keeps CFG clean.
     if(val&&val!==defaultTabName(id))newLabels[id]=val;
+    // Track which built-in tabs are marked hidden (custom tabs get outright deleted instead).
+    if(r.dataset.hidden==="1")newHidden.push(id);
   });
   // Delete any custom tabs whose rows are no longer present
   const currentCustomIds=(CFG.customTabs||[]).map(t=>t.id);
@@ -1195,11 +1245,27 @@ function saveTabManager(){
   }
   CFG.tabOrder=newOrder;
   CFG.tabLabels=newLabels;
+  CFG.hiddenTabs=newHidden;
   saveSharedCfg();
   document.getElementById("tabmgrBack").classList.remove("open");
-  // If any custom tabs were removed, rebuild them; otherwise just reapply order/labels.
-  if(removedCustom.length){syncCustomTabsUI();fullRender();document.querySelector('.tab[data-page="ceo"]').click()}
-  else{applyTabOrder();applyTabLabels()}
+  // If any custom tabs were removed, rebuild them; otherwise just reapply order/labels/visibility.
+  if(removedCustom.length){syncCustomTabsUI();fullRender()}
+  else{applyTabOrder();applyTabLabels();applyTabVisibility()}
+  // If the current tab was just hidden, switch to the first visible tab.
+  const active=document.querySelector('.tab[data-page].active');
+  if(active&&newHidden.includes(active.dataset.page)){
+    const first=document.querySelector('.tab[data-page]:not([style*="display: none"])');
+    if(first)first.click();
+  }
+}
+
+// Apply hidden state — collapses tab buttons in the nav for any tab listed in
+// CFG.hiddenTabs. Reversible: unhiding via the tab manager reveals them again.
+function applyTabVisibility(){
+  const hidden=new Set(CFG.hiddenTabs||[]);
+  document.querySelectorAll(".tab[data-page]").forEach(t=>{
+    t.style.display=hidden.has(t.dataset.page)?"none":"";
+  });
 }
 
 function wireTabClicks(){
@@ -1365,10 +1431,75 @@ function openWidgetBuilder(tabId,existing){
     const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));}}
   function bindCard(){const ss=ov.querySelector(".wb-src");
     const renderCols=()=>{const agg=ov.querySelector("#wb-agg").value;const box=ov.querySelector("#wb-cols");
-      if(agg==="count"){box.innerHTML=`<div class="wb-hint">Counts non-empty rows in range. No column needed.</div>`;return}
-      if(agg==="ratio"){box.innerHTML=`<label>A (numerator column)</label>${colSelect("wb-col",w.src,w.col)}<label>B (denominator column)</label>${colSelect("wb-col2",w.src,w.col2)}`;return}
-      if(agg==="math"){box.innerHTML=`<label>A column</label>${colSelect("wb-col",w.src,w.col)}<label>B column (optional)</label>${colSelect("wb-col2",w.src,w.col2)}<label>Expression (use A and B)</label><input id="wb-expr" value="${esc(w.expr||"A")}" placeholder="e.g. (A - B) / A">`;return}
-      box.innerHTML=`<label>Column</label>${colSelect("wb-col",w.src,w.col)}`};
+      if(agg==="count"){box.innerHTML=`<div class="wb-hint">Counts non-empty rows in range. No column needed.</div>`;renderExtras(agg);return}
+      if(agg==="ratio"){box.innerHTML=`<label>A (numerator column)</label>${colSelect("wb-col",w.src,w.col)}<label>B (denominator column)</label>${colSelect("wb-col2",w.src,w.col2)}`;renderExtras(agg);return}
+      if(agg==="math"){box.innerHTML=`<label>A column</label>${colSelect("wb-col",w.src,w.col)}<label>B column (optional)</label>${colSelect("wb-col2",w.src,w.col2)}<label>Expression (use A and B)</label><input id="wb-expr" value="${esc(w.expr||"A")}" placeholder="e.g. (A - B) / A">`;renderExtras(agg);return}
+      box.innerHTML=`<label>Column</label>${colSelect("wb-col",w.src,w.col)}`;renderExtras(agg)};
+    // Multi-source extras — only supported for sum/avg aggs. For ratio/math/count
+    // the notion of "add another source" is ambiguous, so we hide it.
+    const renderExtras=agg=>{
+      let host=ov.querySelector("#wb-extras");
+      if(!host){host=document.createElement("div");host.id="wb-extras";ov.querySelector("#wb-dyn").appendChild(host)}
+      const supported=(agg==="sum"||agg==="avg");
+      if(!supported){host.innerHTML="";return}
+      w.extra=Array.isArray(w.extra)?w.extra:[];
+      host.innerHTML=`<label style="margin-top:14px">Combine with other sources <span class="wb-hint" style="font-weight:400">(each contribution is added to the total; use − to subtract)</span></label>
+        <div id="wb-extra-list">${w.extra.map((e,i)=>extraRow(e,i)).join("")}</div>
+        <button class="btn" id="wb-add-extra" style="margin-top:8px">+ Add another source</button>`;
+      wireExtras();
+    };
+    const extraRow=(e,i)=>`<div class="wb-extra-row" data-i="${i}" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px">
+      <select class="wb-extra-sign" style="width:auto;min-width:52px"><option value="+" ${e.sign!=="-"?'selected':''}>+</option><option value="-" ${e.sign==="-"?'selected':''}>−</option></select>
+      <select class="wb-extra-src" style="flex:1">${srcOptions(e.src)}</select>
+      <input class="wb-extra-col colsearch" list="dl-ex-${i}" value="${esc(e.col||'')}" placeholder="column" style="flex:1">
+      <datalist id="dl-ex-${i}">${(headersOf(e.src)||[]).map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
+      <input class="wb-extra-date colsearch" list="dl-exd-${i}" value="${esc(e.dateCol||'')}" placeholder="date col" style="flex:1">
+      <datalist id="dl-exd-${i}">${(headersOf(e.src)||[]).filter(isDateCol).map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
+      <button class="wb-extra-rm" data-i="${i}" style="background:transparent;color:#f87171;border:none;cursor:pointer;padding:4px 8px;font-size:14px">✕</button>
+    </div>`;
+    const wireExtras=()=>{
+      // Add row
+      const addBtn=ov.querySelector("#wb-add-extra");
+      if(addBtn)addBtn.onclick=()=>{
+        // Snapshot current UI state into w.extra before re-rendering
+        collectExtras();
+        w.extra.push({src:"",col:"",dateCol:"",sign:"+"});
+        renderCols();
+      };
+      // Remove row
+      ov.querySelectorAll(".wb-extra-rm").forEach(b=>b.onclick=()=>{
+        collectExtras();
+        w.extra.splice(+b.dataset.i,1);
+        renderCols();
+      });
+      // Source changes update the col + date datalists in place
+      ov.querySelectorAll(".wb-extra-row").forEach(row=>{
+        const sSel=row.querySelector(".wb-extra-src");
+        sSel.onchange=()=>{
+          const sid=sSel.value;
+          const colIn=row.querySelector(".wb-extra-col");
+          const dateIn=row.querySelector(".wb-extra-date");
+          const lidC=colIn.getAttribute("list"),lidD=dateIn.getAttribute("list");
+          const dlC=document.getElementById(lidC),dlD=document.getElementById(lidD);
+          const hs=headersOf(sid)||[];
+          if(dlC)dlC.innerHTML=hs.map(h=>`<option value="${esc(h)}"></option>`).join("");
+          if(dlD)dlD.innerHTML=hs.filter(isDateCol).map(h=>`<option value="${esc(h)}"></option>`).join("");
+          // Auto-fill date column when a source is picked, matching primary-source behavior
+          if(!dateIn.value)dateIn.value=firstDateCol(sid);
+        };
+      });
+    };
+    // Read the current UI state of extras back into w.extra
+    const collectExtras=()=>{
+      w.extra=[...ov.querySelectorAll(".wb-extra-row")].map(row=>({
+        sign:row.querySelector(".wb-extra-sign").value,
+        src:row.querySelector(".wb-extra-src").value,
+        col:row.querySelector(".wb-extra-col").value.trim(),
+        dateCol:row.querySelector(".wb-extra-date").value.trim(),
+      })).filter(e=>e.src&&e.col); // drop half-filled rows
+    };
+    // Expose for the save handler
+    w._collectExtras=collectExtras;
     renderCols();
     ov.querySelector("#wb-agg").onchange=()=>{w.agg=ov.querySelector("#wb-agg").value;renderCols()};
     if(ss)ss.onchange=()=>{w.src=ss.value;renderCols();const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src))}}
@@ -1389,7 +1520,12 @@ function openWidgetBuilder(tabId,existing){
     const g=s=>{const el=ov.querySelector(s);return el?el.value:""};
     w.src=g(".wb-src");w.dateCol=g(".wb-date");
     if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.rounded=ov.querySelector("#wb-rounded").checked;w.compare=ov.querySelector("#wb-compare").checked;w.sub=g("#wb-sub").trim();
-      w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");}
+      w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");
+      // Persist multi-source extras (only meaningful for sum/avg)
+      if(typeof w._collectExtras==="function"){w._collectExtras();delete w._collectExtras}
+      if(w.agg!=="sum"&&w.agg!=="avg")delete w.extra;
+      if(Array.isArray(w.extra)&&!w.extra.length)delete w.extra;
+    }
     else if(w.type==="bar"){w.col=g(".wb-col");}
     else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;w.hideEmptyCol=g(".wb-hide")||"";}
     saveWidget(w);closeWb();rerenderTabWidgets(w.tab);}
@@ -1521,7 +1657,7 @@ function initEvents(){
   mgrBack.onclick=e=>{if(e.target===mgrBack)mgrBack.classList.remove("open")};
   // Apply saved order + labels once on first paint so a shared config takes
   // effect for anyone opening the dashboard, not just after they change something.
-  applyTabOrder();applyTabLabels();
+  applyTabOrder();applyTabLabels();applyTabVisibility();
   // Delegated widget controls — works for both built-in and custom widgets.
   document.body.addEventListener("click",e=>{
     const b=e.target.closest(".wbtn");if(!b)return;
