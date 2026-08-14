@@ -440,6 +440,31 @@ function clearColCache() { _colCache.clear(); }
 // Read a cell using the resolved column name.
 function getCell(src, row, want) { return row[resolveCol(src, want)]; }
 
+// Check a row against spec.where — an optional {col, op, value} condition that
+// narrows which rows contribute to the aggregate. Supports common operators
+// (equals/not, contains, empty/not, greater/less). Missing column or missing
+// condition = row passes.
+function matchWhere(row, where, src) {
+  if (!where || !where.col) return true;
+  const colH = resolveCol(src, where.col);
+  if (!colH) return true;
+  const raw = row[colH];
+  const val = String(raw == null ? "" : raw).trim();
+  const target = String(where.value == null ? "" : where.value).trim();
+  switch (where.op) {
+    case "equals": return val === target;
+    case "equalsCI": return val.toLowerCase() === target.toLowerCase();
+    case "notEquals": return val !== target;
+    case "contains": return val.toLowerCase().includes(target.toLowerCase());
+    case "notContains": return !val.toLowerCase().includes(target.toLowerCase());
+    case "isEmpty": return val === "";
+    case "notEmpty": return val !== "";
+    case "gt": return parseFloat(val) > parseFloat(target);
+    case "lt": return parseFloat(val) < parseFloat(target);
+    default: return val === target;
+  }
+}
+
 // Compute the aggregated value for a widget spec. Supports single-source or
 // multi-source scorecards. For multi-source, spec.extra is an array of
 // { src, col, dateCol, sign } — each contribution is summed (or subtracted if
@@ -451,8 +476,10 @@ function cAgg(spec,from,to,rowFilter){
   const colR=spec.col?resolveCol(src,spec.col):null;
   const col2R=spec.col2?resolveCol(src,spec.col2):null;
   const inRange=(r,dc)=>{if(!dc)return true;const d=toDate(r[dc]);return d?inR(d,from,to):false};
-  const passes=(r,srcId,dc)=>(!rowFilter||rowFilter(r,srcId))&&inRange(r,dc);
-  const rows=src.rows.filter(r=>passes(r,spec.src,dateColR));
+  // Row-value filter (spec.where) applies to the PRIMARY source only.
+  // Extras/operands can define their own via extra.where / operand.where.
+  const passes=(r,srcId,dc,srcRef,where)=>(!rowFilter||rowFilter(r,srcId))&&inRange(r,dc)&&matchWhere(r,where,srcRef);
+  const rows=src.rows.filter(r=>passes(r,spec.src,dateColR,src,spec.where));
   const sumCol=c=>rows.reduce((a,r)=>a+toNum(r[c]),0);
   const cntCol=c=>rows.reduce((a,r)=>a+((r[c]!=null&&String(r[c]).trim()!=="")?1:0),0);
   // Helper: sum an extra-source contribution against the current range/filter.
@@ -461,7 +488,7 @@ function cAgg(spec,from,to,rowFilter){
     const edc=extra.dateCol?resolveCol(es,extra.dateCol):null;
     const ec=resolveCol(es,extra.col);
     if(!ec)return 0;
-    const erows=es.rows.filter(r=>passes(r,extra.src,edc));
+    const erows=es.rows.filter(r=>passes(r,extra.src,edc,es,extra.where));
     const total=erows.reduce((a,r)=>a+toNum(r[ec]),0);
     return extra.sign==="-"?-total:total;
   };
@@ -475,8 +502,31 @@ function cAgg(spec,from,to,rowFilter){
   }
   if(spec.agg==="avgPer"){const n=cntCol(colR);return n?sumCol(colR)/n:0} // legacy per-row average
   if(spec.agg==="ratio"){const b=sumCol(col2R);return b?sumCol(colR)/b:0}
-  if(spec.agg==="math"){const A=sumCol(colR),B=col2R?sumCol(col2R):0;
-    try{return Function("A","B","return ("+(spec.expr||"A")+")")(A,B)}catch(e){return 0}}
+  if(spec.agg==="math"){
+    // Multi-operand math — each operand has its own {letter, src, col, dateCol}.
+    // Falls back to legacy A=col/B=col2 (both on primary src) if no operands array.
+    const operands=Array.isArray(spec.operands)&&spec.operands.length
+      ?spec.operands
+      :[
+        {letter:"A",src:spec.src,col:spec.col,dateCol:spec.dateCol},
+        {letter:"B",src:spec.src,col:spec.col2,dateCol:spec.dateCol},
+      ];
+    const vals={};
+    operands.forEach(op=>{
+      if(!op||!op.src||!op.col){vals[op&&op.letter||"?"]=0;return}
+      const os=SRC[op.src];if(!os){vals[op.letter]=0;return}
+      const odc=op.dateCol?resolveCol(os,op.dateCol):null;
+      const oc=resolveCol(os,op.col);
+      if(!oc){vals[op.letter]=0;return}
+      const orows=os.rows.filter(r=>passes(r,op.src,odc,os,op.where));
+      vals[op.letter]=orows.reduce((a,r)=>a+toNum(r[oc]),0);
+    });
+    const letters=operands.map(o=>o.letter);
+    // Ensure any letter referenced in the expression but missing still gets 0
+    // so the Function() call doesn't throw ReferenceError.
+    letters.forEach(l=>{if(!(l in vals))vals[l]=0});
+    try{return Function(...letters,"return ("+(spec.expr||"A")+")")(...letters.map(l=>vals[l]))}catch(e){return 0}
+  }
   return sumCol(colR)+extraTotal; // default sum (with multi-source support)
 }
 function cFmt(v,fmt){return fmtValue(v,fmt,false)}
@@ -1407,11 +1457,13 @@ function openWidgetBuilder(tabId,existing){
         <label>Source</label>${srcSel()}
         <div id="wb-cols"></div>
         <label>Date column (for range filtering)</label>${colSelect("wb-date",w.src,w.dateCol)}
+        <div id="wb-where"></div>
         <label>Format</label><select id="wb-fmt"><option value="number" ${w.fmt==="number"?"selected":""}>Number</option><option value="money" ${w.fmt==="money"?"selected":""}>Money ($)</option><option value="percent" ${w.fmt==="percent"?"selected":""}>Percent (%)</option></select>
         <label class="wb-check"><input type="checkbox" id="wb-rounded" ${w.rounded?"checked":""}> Round to whole number (no decimals)</label>
         <label class="wb-check"><input type="checkbox" id="wb-compare" ${w.compare?"checked":""}> Show comparison arrow (▲ / ▼ vs same-length previous period)</label>
         <label>Subtitle (optional)</label><input id="wb-sub" value="${esc(w.sub||"")}" placeholder="e.g. closed ÷ taken">`;
       bindCard();
+      renderWhere();
     }else if(type==="bar"){
       dyn.innerHTML=`<label>Source</label>${srcSel()}
         <label>Column to chart (summed per day)</label>${colSelect("wb-col",w.src,w.col)}
@@ -1433,8 +1485,77 @@ function openWidgetBuilder(tabId,existing){
     const renderCols=()=>{const agg=ov.querySelector("#wb-agg").value;const box=ov.querySelector("#wb-cols");
       if(agg==="count"){box.innerHTML=`<div class="wb-hint">Counts non-empty rows in range. No column needed.</div>`;renderExtras(agg);return}
       if(agg==="ratio"){box.innerHTML=`<label>A (numerator column)</label>${colSelect("wb-col",w.src,w.col)}<label>B (denominator column)</label>${colSelect("wb-col2",w.src,w.col2)}`;renderExtras(agg);return}
-      if(agg==="math"){box.innerHTML=`<label>A column</label>${colSelect("wb-col",w.src,w.col)}<label>B column (optional)</label>${colSelect("wb-col2",w.src,w.col2)}<label>Expression (use A and B)</label><input id="wb-expr" value="${esc(w.expr||"A")}" placeholder="e.g. (A - B) / A">`;renderExtras(agg);return}
+      if(agg==="math"){
+        // Migrate legacy widget on-the-fly if it has col/col2 but no operands array
+        if(!Array.isArray(w.operands)||!w.operands.length){
+          w.operands=[
+            {letter:"A",src:w.src||"",col:w.col||"",dateCol:w.dateCol||""},
+            {letter:"B",src:w.src||"",col:w.col2||"",dateCol:w.dateCol||""},
+          ];
+        }
+        box.innerHTML=`<div class="wb-hint">Each operand can pull from a different source. Add as many as you need — A, B, C, D... — then reference them in the expression below.</div>
+          <div id="wb-operands">${w.operands.map((op,i)=>operandRow(op,i)).join("")}</div>
+          <button class="btn" id="wb-add-op" style="margin-top:6px">+ Add operand</button>
+          <label style="margin-top:12px">Expression (uses the letters above)</label>
+          <input id="wb-expr" value="${esc(w.expr||"A")}" placeholder="e.g. A + B + C - D, or (A - B) / A">`;
+        wireOperands();
+        renderExtras("math"); // math doesn't use the + / - extras, hide them
+        return;
+      }
       box.innerHTML=`<label>Column</label>${colSelect("wb-col",w.src,w.col)}`;renderExtras(agg)};
+    // Operand rows for the custom-math builder — letter + source + column + date column
+    const operandRow=(op,i)=>`<div class="wb-op-row" data-i="${i}" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px">
+      <div style="min-width:26px;font-weight:700;color:var(--gold);font-size:14px;text-align:center">${esc(op.letter)}</div>
+      <select class="wb-op-src" style="flex:1">${srcOptions(op.src)}</select>
+      <input class="wb-op-col colsearch" list="dl-op-${i}" value="${esc(op.col||'')}" placeholder="column" style="flex:1">
+      <datalist id="dl-op-${i}">${(headersOf(op.src)||[]).map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
+      <input class="wb-op-date colsearch" list="dl-opd-${i}" value="${esc(op.dateCol||'')}" placeholder="date col" style="flex:1">
+      <datalist id="dl-opd-${i}">${(headersOf(op.src)||[]).filter(isDateCol).map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
+      ${i>=2?`<button class="wb-op-rm" data-i="${i}" style="background:transparent;color:#f87171;border:none;cursor:pointer;padding:4px 8px;font-size:14px" title="Remove ${esc(op.letter)}">✕</button>`:'<span style="width:28px"></span>'}
+    </div>`;
+    // Next-letter helper: A → B → C → ... → Z
+    const nextLetter=used=>{
+      for(let c=65;c<=90;c++){const L=String.fromCharCode(c);if(!used.includes(L))return L}
+      return "?";
+    };
+    const wireOperands=()=>{
+      const addBtn=ov.querySelector("#wb-add-op");
+      if(addBtn)addBtn.onclick=()=>{
+        collectOperands();
+        const usedLetters=w.operands.map(o=>o.letter);
+        w.operands.push({letter:nextLetter(usedLetters),src:"",col:"",dateCol:""});
+        renderCols();
+      };
+      ov.querySelectorAll(".wb-op-rm").forEach(b=>b.onclick=()=>{
+        collectOperands();
+        w.operands.splice(+b.dataset.i,1);
+        renderCols();
+      });
+      // Source change → refresh column datalists in place
+      ov.querySelectorAll(".wb-op-row").forEach(row=>{
+        const sSel=row.querySelector(".wb-op-src");
+        sSel.onchange=()=>{
+          const sid=sSel.value;
+          const colIn=row.querySelector(".wb-op-col");
+          const dateIn=row.querySelector(".wb-op-date");
+          const dlC=document.getElementById(colIn.getAttribute("list"));
+          const dlD=document.getElementById(dateIn.getAttribute("list"));
+          const hs=headersOf(sid)||[];
+          if(dlC)dlC.innerHTML=hs.map(h=>`<option value="${esc(h)}"></option>`).join("");
+          if(dlD)dlD.innerHTML=hs.filter(isDateCol).map(h=>`<option value="${esc(h)}"></option>`).join("");
+          if(!dateIn.value)dateIn.value=firstDateCol(sid);
+        };
+      });
+    };
+    const collectOperands=()=>{
+      w.operands=[...ov.querySelectorAll(".wb-op-row")].map(row=>({
+        letter:row.querySelector('div[style*="font-weight:700"]').textContent.trim(),
+        src:row.querySelector(".wb-op-src").value,
+        col:row.querySelector(".wb-op-col").value.trim(),
+        dateCol:row.querySelector(".wb-op-date").value.trim(),
+      }));
+    };
+    w._collectOperands=collectOperands;
     // Multi-source extras — only supported for sum/avg aggs. For ratio/math/count
     // the notion of "add another source" is ambiguous, so we hide it.
     const renderExtras=agg=>{
@@ -1502,7 +1623,34 @@ function openWidgetBuilder(tabId,existing){
     w._collectExtras=collectExtras;
     renderCols();
     ov.querySelector("#wb-agg").onchange=()=>{w.agg=ov.querySelector("#wb-agg").value;renderCols()};
-    if(ss)ss.onchange=()=>{w.src=ss.value;renderCols();const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src))}}
+    if(ss)ss.onchange=()=>{w.src=ss.value;renderCols();const d=ov.querySelector(".wb-date");if(d)d.outerHTML=colSelect("wb-date",w.src,firstDateCol(w.src));renderWhere();}}
+
+  // Row-filter UI ("Only include rows where..."). Applies to the primary
+  // source only. Shown on all card aggs. Empty column = no filter.
+  function renderWhere(){
+    const host=ov.querySelector("#wb-where");if(!host)return;
+    const wf=w.where||{col:"",op:"equals",value:""};
+    host.innerHTML=`<label>Only include rows where <span class="wb-hint" style="font-weight:400">(optional — leave blank to include all)</span></label>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${colSelect("wb-where-col",w.src,wf.col).replace('class="wb-where-col"','class="wb-where-col" style="flex:1"')}
+        <select class="wb-where-op" style="width:auto;min-width:110px">
+          <option value="equals" ${wf.op==="equals"?"selected":""}>equals</option>
+          <option value="equalsCI" ${wf.op==="equalsCI"?"selected":""}>equals (any case)</option>
+          <option value="notEquals" ${wf.op==="notEquals"?"selected":""}>≠ (not equals)</option>
+          <option value="contains" ${wf.op==="contains"?"selected":""}>contains</option>
+          <option value="notContains" ${wf.op==="notContains"?"selected":""}>doesn't contain</option>
+          <option value="isEmpty" ${wf.op==="isEmpty"?"selected":""}>is empty</option>
+          <option value="notEmpty" ${wf.op==="notEmpty"?"selected":""}>is not empty</option>
+          <option value="gt" ${wf.op==="gt"?"selected":""}>&gt;</option>
+          <option value="lt" ${wf.op==="lt"?"selected":""}>&lt;</option>
+        </select>
+        <input class="wb-where-val" value="${esc(wf.value||"")}" placeholder="value" style="flex:1">
+      </div>`;
+    // Hide the value input for is-empty / is-not-empty operators
+    const opSel=host.querySelector(".wb-where-op"),valIn=host.querySelector(".wb-where-val");
+    const applyOpUI=()=>{const o=opSel.value;valIn.style.display=(o==="isEmpty"||o==="notEmpty")?"none":""};
+    applyOpUI();opSel.onchange=applyOpUI;
+  }
   function bindTable(){const ss=ov.querySelector(".wb-src");w.cols=w.cols||[{header:"",col:""}];
     const draw=()=>{const box=ov.querySelector("#wb-tblcols");box.innerHTML=w.cols.map((c,i)=>
       `<div class="wb-colrow"><input class="wb-ch" data-i="${i}" value="${esc(c.header||"")}" placeholder="Header">${colSelect("wb-cc",w.src,c.col).replace('class="wb-cc"',`class="wb-cc" data-i="${i}"`)}<button class="wb-rm" data-i="${i}">✕</button></div>`).join("");
@@ -1521,10 +1669,17 @@ function openWidgetBuilder(tabId,existing){
     w.src=g(".wb-src");w.dateCol=g(".wb-date");
     if(w.type==="card"){w.agg=g("#wb-agg");w.fmt=g("#wb-fmt");w.rounded=ov.querySelector("#wb-rounded").checked;w.compare=ov.querySelector("#wb-compare").checked;w.sub=g("#wb-sub").trim();
       w.col=g(".wb-col");w.col2=g(".wb-col2");w.expr=g("#wb-expr");
+      // Row-filter (spec.where) — only saved when a column is picked.
+      const wc=g(".wb-where-col"),wo=g(".wb-where-op"),wv=g(".wb-where-val");
+      if(wc){w.where={col:wc,op:wo||"equals",value:(wo==="isEmpty"||wo==="notEmpty")?"":(wv||"")}}
+      else{delete w.where}
       // Persist multi-source extras (only meaningful for sum/avg)
       if(typeof w._collectExtras==="function"){w._collectExtras();delete w._collectExtras}
       if(w.agg!=="sum"&&w.agg!=="avg")delete w.extra;
       if(Array.isArray(w.extra)&&!w.extra.length)delete w.extra;
+      // Persist multi-operand config for custom math
+      if(typeof w._collectOperands==="function"){w._collectOperands();delete w._collectOperands}
+      if(w.agg!=="math")delete w.operands;
     }
     else if(w.type==="bar"){w.col=g(".wb-col");}
     else if(w.type==="table"){const cols=[];ov.querySelectorAll(".wb-colrow").forEach((row,i)=>{const h=row.querySelector(".wb-ch").value.trim();const c=row.querySelector(".wb-cc").value;if(c)cols.push({header:h||c,col:c})});w.cols=cols;w.hideEmptyCol=g(".wb-hide")||"";}
