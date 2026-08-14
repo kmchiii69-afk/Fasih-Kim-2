@@ -426,10 +426,30 @@ function resolveCol(src, want) {
   if (_colCache.has(cacheKey)) return _colCache.get(cacheKey);
   let hit = headers.find(h => h === want);
   if (!hit) {
+    // Standard normalize — collapse whitespace, lowercase.
     const norm = s => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
     const w = norm(want);
     hit = headers.find(h => norm(h).startsWith(w));
     if (!hit) hit = headers.find(h => norm(h).includes(w));
+  }
+  if (!hit) {
+    // Stricter normalize — also collapses whitespace next to punctuation. This
+    // catches Google Forms columns where "Foo (Number only)" got saved as
+    // "Foo(Number only)" (or vice versa), which the plain-whitespace norm above
+    // treats as distinct strings.
+    const normTight = s => String(s || "").replace(/\s+/g, " ").replace(/\s*([(){}\[\],:;])\s*/g, "$1").trim().toLowerCase();
+    const wt = normTight(want);
+    hit = headers.find(h => normTight(h) === wt);
+    if (!hit) hit = headers.find(h => normTight(h).startsWith(wt));
+    if (!hit) hit = headers.find(h => normTight(h).includes(wt));
+  }
+  if (!hit) {
+    // Last resort — strip the trailing "(Number only...)" parenthetical from
+    // both sides and match on the label alone. Google Forms auto-appends this
+    // help text and small edits to it silently break the widget mapping.
+    const stripParen = s => String(s || "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+    const ws = stripParen(want);
+    if (ws) hit = headers.find(h => stripParen(h) === ws);
   }
   const resolved = hit || want;
   _colCache.set(cacheKey, resolved);
