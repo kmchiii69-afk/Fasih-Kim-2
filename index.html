@@ -513,11 +513,16 @@ function cAgg(spec,from,to,rowFilter){
       ];
     const vals={};
     operands.forEach(op=>{
-      if(!op||!op.src||!op.col){vals[op&&op.letter||"?"]=0;return}
-      const os=SRC[op.src];if(!os){vals[op.letter]=0;return}
+      if(!op||!op.src||!op.col){
+        // Diagnostic: log which operand is missing config so it's easy to spot
+        // when a widget quietly returns 0 for one of its inputs.
+        if(op&&op.letter)console.warn("[widget "+spec.id+"] operand "+op.letter+" missing src or col — treating as 0");
+        vals[op&&op.letter||"?"]=0;return
+      }
+      const os=SRC[op.src];if(!os){console.warn("[widget "+spec.id+"] operand "+op.letter+" source not found: "+op.src);vals[op.letter]=0;return}
       const odc=op.dateCol?resolveCol(os,op.dateCol):null;
       const oc=resolveCol(os,op.col);
-      if(!oc){vals[op.letter]=0;return}
+      if(!oc){console.warn("[widget "+spec.id+"] operand "+op.letter+" column not found: "+op.col+" (in source "+op.src+")");vals[op.letter]=0;return}
       const orows=os.rows.filter(r=>passes(r,op.src,odc,os,op.where));
       vals[op.letter]=orows.reduce((a,r)=>a+toNum(r[oc]),0);
     });
@@ -1504,8 +1509,8 @@ function openWidgetBuilder(tabId,existing){
       }
       box.innerHTML=`<label>Column</label>${colSelect("wb-col",w.src,w.col)}`;renderExtras(agg)};
     // Operand rows for the custom-math builder — letter + source + column + date column
-    const operandRow=(op,i)=>`<div class="wb-op-row" data-i="${i}" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px">
-      <div style="min-width:26px;font-weight:700;color:var(--gold);font-size:14px;text-align:center">${esc(op.letter)}</div>
+    const operandRow=(op,i)=>`<div class="wb-op-row" data-i="${i}" data-letter="${esc(op.letter)}" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px">
+      <div class="wb-op-letter" style="min-width:26px;font-weight:700;color:var(--gold);font-size:14px;text-align:center">${esc(op.letter)}</div>
       <select class="wb-op-src" style="flex:1">${srcOptions(op.src)}</select>
       <input class="wb-op-col colsearch" list="dl-op-${i}" value="${esc(op.col||'')}" placeholder="column" style="flex:1">
       <datalist id="dl-op-${i}">${(headersOf(op.src)||[]).map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
@@ -1549,11 +1554,13 @@ function openWidgetBuilder(tabId,existing){
     };
     const collectOperands=()=>{
       w.operands=[...ov.querySelectorAll(".wb-op-row")].map(row=>({
-        letter:row.querySelector('div[style*="font-weight:700"]').textContent.trim(),
+        // Read letter from data-attribute — reliable across all browsers,
+        // unlike CSS attribute selectors on the style attribute.
+        letter:row.dataset.letter||"",
         src:row.querySelector(".wb-op-src").value,
         col:row.querySelector(".wb-op-col").value.trim(),
         dateCol:row.querySelector(".wb-op-date").value.trim(),
-      }));
+      })).filter(op=>op.letter); // drop any letterless rows defensively
     };
     w._collectOperands=collectOperands;
     // Multi-source extras — only supported for sum/avg aggs. For ratio/math/count
