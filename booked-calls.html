@@ -379,14 +379,16 @@
       const o = String(r.Outcome || "").trim();
       return o && !NOT_SHOWED.has(o);
     }).length;
-    // Show rate is based on QUALIFIED calls only — the "did we run the calls
-    // we said we would?" ratio. Uses qualified-and-showed / qualified-total.
-    const qualifiedShowed = rows.filter(r => {
-      if (String(r.Qualified || "").toLowerCase() !== "yes") return false;
+    // No-shows = outcome IS one of the three no-show variants.
+    const notShowed = rows.filter(r => {
       const o = String(r.Outcome || "").trim();
-      return o && !NOT_SHOWED.has(o);
+      return o && NOT_SHOWED.has(o);
     }).length;
-    const showRate = q > 0 ? Math.round((qualifiedShowed / q) * 100) : 0;
+    // Show Rate = shows / (shows + no-shows). Only counts calls whose outcome
+    // has actually been determined — pending outcomes are excluded from both
+    // numerator and denominator so they don't drag the rate down artificially.
+    const showDenom = showed + notShowed;
+    const showRate = showDenom > 0 ? Math.round((showed / showDenom) * 100) : 0;
     const cashTotal = rows.reduce((a, r) => a + parseCash(r["Cash Collected"]), 0);
     $("summary").innerHTML = `
       <div class="stat"><div class="label">Total Booked</div><div class="val">${total}</div></div>
