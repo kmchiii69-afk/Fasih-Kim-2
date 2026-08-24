@@ -18,7 +18,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--txt);font-family:'Poppins',sans-serif;font-weight:400;line-height:1.5;min-height:100vh}
-  .wrap{max-width:1400px;margin:0 auto;padding:32px 24px}
+  .wrap{max-width:1800px;margin:0 auto;padding:32px 24px}
   .hero{padding-bottom:20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
   h1{font-size:30px;font-weight:800;letter-spacing:-.5px}
   h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -68,22 +68,28 @@
   .modal .btn-primary{background:var(--grad-gold);color:#241803;border:none;border-radius:8px;padding:8px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
   .modal .btn-primary:disabled{opacity:.55;cursor:default}
   .modal .form-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px}
-  .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-top:22px;overflow:hidden}
-  table{width:100%;border-collapse:collapse;font-size:13px}
+  .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-top:22px;overflow-x:auto;overflow-y:visible}
+  /* Custom scrollbar for the horizontal scroll — subtle but visible */
+  .table-wrap::-webkit-scrollbar{height:10px}
+  .table-wrap::-webkit-scrollbar-track{background:var(--panel);border-radius:0 0 12px 12px}
+  .table-wrap::-webkit-scrollbar-thumb{background:rgba(216,169,79,.25);border-radius:5px}
+  .table-wrap::-webkit-scrollbar-thumb:hover{background:rgba(216,169,79,.45)}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:1600px}
   thead{background:var(--panel-alt)}
   th{text-align:left;font-weight:600;color:var(--muted);padding:12px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;white-space:nowrap}
   td{padding:12px 12px;border-bottom:1px solid #221c14;vertical-align:middle}
   tbody tr:last-child td{border-bottom:none}
   tbody tr:hover{background:rgba(216,169,79,.03)}
-  .time{color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .name{font-weight:600;color:var(--txt)}
-  .contact{color:var(--muted);font-size:12.5px}
-  .contact a{color:var(--gold);text-decoration:none;transition:color .15s}
+  .time{color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:75px}
+  .name{font-weight:600;color:var(--txt);min-width:110px}
+  .contact{color:var(--muted);font-size:12.5px;min-width:130px}
+  .contact a{color:var(--gold);text-decoration:none;transition:color .15s;white-space:nowrap}
   .contact a:hover{color:var(--gold-lite);text-decoration:underline}
-  .revenue{font-variant-numeric:tabular-nums}
-  select.source-sel,input.notes-in{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+  .revenue{font-variant-numeric:tabular-nums;min-width:110px;white-space:nowrap}
+  select.source-sel,input.notes-in{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box;min-width:100px}
   select.source-sel:focus,input.notes-in:focus{outline:none;border-color:rgba(216,169,79,.55)}
   input.notes-in{min-width:160px}
+  input.cash-in{min-width:90px}
   .qualified-toggle{display:inline-flex;gap:4px}
   .qtbtn{background:var(--panel-alt);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:.3px;transition:all .15s}
   .qtbtn:hover{color:var(--txt);border-color:rgba(216,169,79,.4)}
@@ -272,18 +278,18 @@
     setTimeout(() => f.classList.remove("show"), 1500);
   }
 
-  // Format "YYYY-MM-DD HH:mm" as "12 Aug · 14:30" for compact display in the table.
-  // We show BOTH the date and time in the call column because you're now
-  // filtering by BOOKING date, so a call could be days or weeks in the future.
+  // Format "YYYY-MM-DD HH:mm" as "24 Aug" — day + month only, no time.
+  // Time was cluttering the table and duplicating info the user rarely needs
+  // at a glance. Hover-tooltip could add it back if requested.
   function fmtCallDT(dt) {
     const s = String(dt || "").trim();
     if (!s) return "—";
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!m) return s;
-    const [, y, mo, d, hm] = m;
+    const [, y, mo, d] = m;
     const dateObj = new Date(+y, +mo - 1, +d);
     const monthLbl = dateObj.toLocaleDateString("en-GB", { month: "short" });
-    return `${+d} ${monthLbl} · ${hm}`;
+    return `${+d} ${monthLbl}`;
   }
   // Same format as fmtCallDT — used for the Booked column so both time columns look consistent.
   const fmtBookedDT = fmtCallDT;
@@ -402,8 +408,8 @@
     tbody.innerHTML = rows.map(r => {
       const id = r["Calendly ID"] || "";
       return `<tr>
-        <td class="time">${esc(fmtBookedDT(r["Booking Time"]))}</td>
-        <td class="time">${esc(fmtCallDT(r["Call Time"]))}</td>
+        <td class="time" title="${esc(r["Booking Time"] || "")}">${esc(fmtBookedDT(r["Booking Time"]))}</td>
+        <td class="time" title="${esc(r["Call Time"] || "")}">${esc(fmtCallDT(r["Call Time"]))}</td>
         <td class="name">${esc(r.Name)}</td>
         <td class="contact">${mailLink(r.Email)}</td>
         <td class="contact">${igLink(r.Instagram)}</td>
