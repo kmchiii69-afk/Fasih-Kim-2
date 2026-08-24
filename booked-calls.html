@@ -134,6 +134,8 @@
       <option value="no">No</option>
       <option value="pending">Pending</option>
     </select>
+    <span class="flabel">Outcome</span>
+    <select id="filterOutcome"><option value="">All</option></select>
     <span class="flabel">Revenue</span>
     <select id="filterRevenue"><option value="">All</option></select>
     <span class="active-count" id="filterCount"></span>
@@ -144,6 +146,7 @@
     <table>
       <thead>
         <tr>
+          <th>Booked</th>
           <th>Call Date/Time</th>
           <th>Name</th>
           <th>Email</th>
@@ -151,7 +154,10 @@
           <th>Phone</th>
           <th>Revenue</th>
           <th>Source</th>
+          <th>Triage</th>
           <th>Qualified?</th>
+          <th>Outcome</th>
+          <th>Cash</th>
           <th>Notes</th>
         </tr>
       </thead>
@@ -192,6 +198,12 @@
         <select id="fSource"></select>
       </div>
       <div class="field">
+        <label>Triage</label>
+        <select id="fTriage"></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
         <label>Qualified</label>
         <select id="fQualified">
           <option value="">Pending</option>
@@ -199,6 +211,14 @@
           <option value="no">No</option>
         </select>
       </div>
+      <div class="field">
+        <label>Outcome</label>
+        <select id="fOutcome"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Cash Collected</label>
+      <input type="text" id="fCashCollected" placeholder="e.g. $2,500 or 2500">
     </div>
     <div class="row2">
       <div class="field">
@@ -229,10 +249,12 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
   // Source dropdown options — the specific UTM sources you track. Any value
-  // from Calendly's utm_source not in this list is preserved and shown as-is
-  // (so if a booking comes in with utm_source=facebook, "facebook" appears in
-  // the dropdown for that row without erasing your preset list).
-  const SOURCE_OPTIONS = ["youtube", "tom", "ayoub", "instagram", "ads", "referral", "direct"];
+  // from Calendly's utm_source not in this list is preserved and shown as-is.
+  const SOURCE_OPTIONS = ["youtube", "george", "tom", "ayoub", "instagram", "ads", "referral", "direct"];
+  // Triage options — who's handling the call (setter/coach who triaged the lead)
+  const TRIAGE_OPTIONS = ["Tom", "Ayoub"];
+  // Outcome options — final disposition of the call
+  const OUTCOME_OPTIONS = ["Deposit", "PIF", "Half Pay", "Cancelled", "No Show", "Rescheduled", "Offer Didn't Buy", "Bad Fit", "No Close"];
 
   function todayUK() {
     const parts = new Intl.DateTimeFormat("en-GB", {
@@ -263,6 +285,8 @@
     const monthLbl = dateObj.toLocaleDateString("en-GB", { month: "short" });
     return `${+d} ${monthLbl} · ${hm}`;
   }
+  // Same format as fmtCallDT — used for the Booked column so both time columns look consistent.
+  const fmtBookedDT = fmtCallDT;
 
   // Instagram handles may be with or without "@" — display clean, link to profile.
   function igLink(handle) {
@@ -296,6 +320,16 @@
       ${opts.map(o => `<option value="${esc(o)}"${o === current ? " selected" : ""}>${esc(o)}</option>`).join("")}
     </select>`;
   }
+  // Small utility to build any select where the current value is preserved
+  // even when it's not in the preset list — same pattern as sourceSelect.
+  function optionSelect(field, opts, current, calendlyId, placeholder) {
+    const all = [...opts];
+    if (current && !all.includes(current)) all.unshift(current);
+    return `<select class="source-sel" data-id="${esc(calendlyId)}" data-field="${field}">
+      <option value="">${esc(placeholder || "—")}</option>
+      ${all.map(o => `<option value="${esc(o)}"${o === current ? " selected" : ""}>${esc(o)}</option>`).join("")}
+    </select>`;
+  }
   function qualifiedButtons(current, calendlyId) {
     const cur = String(current || "").toLowerCase().trim();
     return `<div class="qualified-toggle" data-id="${esc(calendlyId)}">
@@ -306,29 +340,69 @@
   function notesInput(current, calendlyId) {
     return `<input type="text" class="notes-in" data-id="${esc(calendlyId)}" data-field="notes" value="${esc(current || "")}" placeholder="Add note…">`;
   }
+  // Cash Collected — free-text so people can type "$5,000" or "5000" or "5k"
+  // without validation friction. Aggregation strips non-numeric chars before summing.
+  function cashInput(current, calendlyId) {
+    return `<input type="text" class="notes-in cash-in" data-id="${esc(calendlyId)}" data-field="cashCollected" value="${esc(current || "")}" placeholder="$0" style="max-width:90px;text-align:right">`;
+  }
+
+  // Outcomes that represent a no-show scenario (call didn't happen for one of these reasons).
+  // Anything else with an outcome set = the call happened / the person showed up.
+  const NOT_SHOWED = new Set(["No Show", "Cancelled", "Rescheduled"]);
+  // Parse a cash cell — accepts "$5,000", "5000", "5k", "5.5k" — returns a number.
+  function parseCash(v) {
+    if (v == null) return 0;
+    let s = String(v).trim().toLowerCase().replace(/[$,\s]/g, "");
+    if (!s) return 0;
+    // "5k" / "5.5k" → thousands multiplier
+    const kMatch = s.match(/^([\d.]+)k$/);
+    if (kMatch) return parseFloat(kMatch[1]) * 1000;
+    const n = parseFloat(s);
+    return isFinite(n) ? n : 0;
+  }
+  const fmtMoney = n => "$" + Math.round(n).toLocaleString();
 
   function renderSummary(rows) {
     const total = rows.length;
     const q = rows.filter(r => String(r.Qualified || "").toLowerCase() === "yes").length;
     const d = rows.filter(r => String(r.Qualified || "").toLowerCase() === "no").length;
     const p = total - q - d;
+    // "Showed" = row has an outcome AND it's not one of the no-show variants.
+    // Empty outcome doesn't count either way (still pending).
+    const showed = rows.filter(r => {
+      const o = String(r.Outcome || "").trim();
+      return o && !NOT_SHOWED.has(o);
+    }).length;
+    // Show rate is based on QUALIFIED calls only — the "did we run the calls
+    // we said we would?" ratio. Uses qualified-and-showed / qualified-total.
+    const qualifiedShowed = rows.filter(r => {
+      if (String(r.Qualified || "").toLowerCase() !== "yes") return false;
+      const o = String(r.Outcome || "").trim();
+      return o && !NOT_SHOWED.has(o);
+    }).length;
+    const showRate = q > 0 ? Math.round((qualifiedShowed / q) * 100) : 0;
+    const cashTotal = rows.reduce((a, r) => a + parseCash(r["Cash Collected"]), 0);
     $("summary").innerHTML = `
-      <div class="stat"><div class="label">Total</div><div class="val">${total}</div></div>
+      <div class="stat"><div class="label">Total Booked</div><div class="val">${total}</div></div>
       <div class="stat qualified"><div class="label">Qualified</div><div class="val">${q}</div></div>
       <div class="stat disqualified"><div class="label">Disqualified</div><div class="val">${d}</div></div>
       <div class="stat pending"><div class="label">Pending</div><div class="val">${p}</div></div>
+      <div class="stat"><div class="label">Calls Showed</div><div class="val">${showed}</div></div>
+      <div class="stat qualified"><div class="label">Show Rate</div><div class="val">${showRate}%</div></div>
+      <div class="stat qualified"><div class="label">Cash Collected</div><div class="val">${fmtMoney(cashTotal)}</div></div>
     `;
   }
 
   function renderRows(rows) {
     const tbody = $("tbody");
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">No calls booked</div>Nothing was booked in ${esc(currentLabel())}. New bookings will appear here automatically.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13"><div class="empty"><div class="gold-text">No calls booked</div>Nothing was booked in ${esc(currentLabel())}. New bookings will appear here automatically.</div></td></tr>`;
       return;
     }
     tbody.innerHTML = rows.map(r => {
       const id = r["Calendly ID"] || "";
       return `<tr>
+        <td class="time">${esc(fmtBookedDT(r["Booking Time"]))}</td>
         <td class="time">${esc(fmtCallDT(r["Call Time"]))}</td>
         <td class="name">${esc(r.Name)}</td>
         <td class="contact">${mailLink(r.Email)}</td>
@@ -336,7 +410,10 @@
         <td class="contact">${telLink(r.Phone)}</td>
         <td class="revenue">${esc(r["Current Revenue"] || "—")}</td>
         <td>${sourceSelect(r.Source || "direct", id)}</td>
+        <td>${optionSelect("triage", TRIAGE_OPTIONS, r.Triage || "", id, "—")}</td>
         <td>${qualifiedButtons(r.Qualified, id)}</td>
+        <td>${optionSelect("outcome", OUTCOME_OPTIONS, r.Outcome || "", id, "—")}</td>
+        <td>${cashInput(r["Cash Collected"], id)}</td>
         <td>${notesInput(r.Notes, id)}</td>
       </tr>`;
     }).join("");
@@ -347,11 +424,16 @@
   // Optimistic UI: the value's already visible; if the POST fails we flash red.
   function wireRowHandlers() {
     document.querySelectorAll(".source-sel").forEach(sel => {
-      sel.onchange = () => saveField(sel.dataset.id, "source", sel.value);
+      // Save under the field name declared on the element (source / triage / outcome).
+      // Was hardcoded to "source" before, which meant triage/outcome selects would
+      // silently overwrite the source column.
+      sel.onchange = () => saveField(sel.dataset.id, sel.dataset.field || "source", sel.value);
     });
     document.querySelectorAll(".notes-in").forEach(inp => {
       // Save on blur — avoids one API call per keystroke.
-      inp.onblur = () => saveField(inp.dataset.id, "notes", inp.value);
+      // Uses dataset.field so cash inputs (cashCollected) save correctly,
+      // not just notes. Both share the class for consistent styling.
+      inp.onblur = () => saveField(inp.dataset.id, inp.dataset.field || "notes", inp.value);
       inp.onkeydown = e => { if (e.key === "Enter") inp.blur(); };
     });
     document.querySelectorAll(".qualified-toggle .qtbtn").forEach(btn => {
@@ -396,19 +478,24 @@
   let mode = "day"; // "day" | "month"
   let loading = false;
   let ALL_ROWS = []; // most recent fetch — filters run against this
-  const FILTERS = { source: "", qualified: "", revenue: "" };
+  const FILTERS = { source: "", qualified: "", revenue: "", outcome: "" };
 
   // Populate the source + revenue dropdowns with unique values from the current
   // dataset. Called after every fetch so options match what's actually there.
   function rebuildFilterOptions(rows) {
     const sources = [...new Set(rows.map(r => String(r.Source || "").trim()).filter(Boolean))].sort();
     const revenues = [...new Set(rows.map(r => String(r["Current Revenue"] || "").trim()).filter(Boolean))].sort();
+    // Outcome pull: preset options first (so they always appear), then any
+    // unusual values already stored in data (defensive if someone typed direct).
+    const dataOutcomes = new Set(rows.map(r => String(r.Outcome || "").trim()).filter(Boolean));
+    const outcomes = [...OUTCOME_OPTIONS, ...[...dataOutcomes].filter(o => !OUTCOME_OPTIONS.includes(o))];
     const setSel = (id, values, current) => {
       const sel = $(id);
       sel.innerHTML = `<option value="">All</option>` + values.map(v => `<option value="${esc(v)}"${v === current ? " selected" : ""}>${esc(v)}</option>`).join("");
     };
     setSel("filterSource", sources, FILTERS.source);
     setSel("filterRevenue", revenues, FILTERS.revenue);
+    setSel("filterOutcome", outcomes, FILTERS.outcome);
     $("filterQualified").value = FILTERS.qualified;
   }
 
@@ -416,6 +503,7 @@
   function applyFilters() {
     return ALL_ROWS.filter(r => {
       if (FILTERS.source && String(r.Source || "").trim() !== FILTERS.source) return false;
+      if (FILTERS.outcome && String(r.Outcome || "").trim() !== FILTERS.outcome) return false;
       if (FILTERS.revenue && String(r["Current Revenue"] || "").trim() !== FILTERS.revenue) return false;
       if (FILTERS.qualified) {
         const q = String(r.Qualified || "").toLowerCase().trim();
@@ -471,7 +559,7 @@
       rebuildFilterOptions(ALL_ROWS);
       renderFiltered();
     } catch (e) {
-      $("tbody").innerHTML = `<tr><td colspan="9"><div class="empty"><div class="gold-text">Couldn't load calls</div>${esc(e.message || e)}</div></td></tr>`;
+      $("tbody").innerHTML = `<tr><td colspan="13"><div class="empty"><div class="gold-text">Couldn't load calls</div>${esc(e.message || e)}</div></td></tr>`;
     } finally {
       loading = false;
       $("refreshBtn").classList.remove("syncing");
@@ -479,7 +567,7 @@
   }
 
   // Wire up the filter dropdowns — change re-renders (no fetch).
-  ["filterSource", "filterQualified", "filterRevenue"].forEach(id => {
+  ["filterSource", "filterQualified", "filterRevenue", "filterOutcome"].forEach(id => {
     $(id).addEventListener("change", e => {
       const key = id.replace("filter", "").toLowerCase();
       FILTERS[key] = e.target.value;
@@ -487,8 +575,8 @@
     });
   });
   $("clearFilters").addEventListener("click", () => {
-    FILTERS.source = FILTERS.qualified = FILTERS.revenue = "";
-    $("filterSource").value = $("filterQualified").value = $("filterRevenue").value = "";
+    FILTERS.source = FILTERS.qualified = FILTERS.revenue = FILTERS.outcome = "";
+    $("filterSource").value = $("filterQualified").value = $("filterRevenue").value = $("filterOutcome").value = "";
     renderFiltered();
   });
 
@@ -519,11 +607,15 @@
   /* ═══════════════ ADD BOOKING MODAL ═══════════════ */
   function openAddModal() {
     // Reset all form fields to a clean state
-    ["fName","fEmail","fInstagram","fPhone","fRevenue","fNotes"].forEach(id => $(id).value = "");
+    ["fName","fEmail","fInstagram","fPhone","fRevenue","fNotes","fCashCollected"].forEach(id => $(id).value = "");
     $("fQualified").value = "";
-    // Populate source dropdown with the standard preset options
+    // Populate the option dropdowns with our preset options
     $("fSource").innerHTML = SOURCE_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
     $("fSource").value = "direct";
+    $("fTriage").innerHTML = `<option value="">—</option>` + TRIAGE_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("fTriage").value = "";
+    $("fOutcome").innerHTML = `<option value="">—</option>` + OUTCOME_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("fOutcome").value = "";
     // Default booking time = now (input type=datetime-local wants YYYY-MM-DDTHH:mm)
     const now = new Date();
     const pad = n => String(n).padStart(2, "0");
@@ -553,10 +645,13 @@
       phone: $("fPhone").value.trim(),
       revenue: $("fRevenue").value.trim(),
       source: $("fSource").value,
+      triage: $("fTriage").value,
+      outcome: $("fOutcome").value,
       qualified: $("fQualified").value,
       bookingTime: $("fBookingTime").value,
       callTime: $("fCallTime").value,
       notes: $("fNotes").value.trim(),
+      cashCollected: $("fCashCollected").value.trim(),
     };
     try {
       const r = await fetch("/api/booked-calls-add", {
