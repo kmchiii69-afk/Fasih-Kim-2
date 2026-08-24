@@ -60,12 +60,16 @@ export default async function handler(req, res) {
     }
     // Only these fields are user-editable via this endpoint. Everything else
     // is set by the webhook and stays authoritative to Calendly.
-    const EDITABLE = ["Qualified", "Source", "Notes"];
+    const EDITABLE = ["Qualified", "Source", "Notes", "Triage", "Outcome", "Cash Collected"];
     const updates = {};
     EDITABLE.forEach(k => {
-      // JSON keys are lowercased/camelCased for JS ergonomics: qualified/source/notes
-      const jsKey = k.toLowerCase();
-      if (jsKey in body) updates[k] = body[jsKey];
+      // Two accepted JSON key forms so the frontend has flexibility:
+      //  - lowercase: "qualified", "source", "cash collected"
+      //  - camelCase: "cashCollected"   ← preferred for multi-word fields
+      const lower = k.toLowerCase();
+      const camel = k.replace(/\s+(.)/g, (_, c) => c.toUpperCase()).replace(/^./, c => c.toLowerCase());
+      const key = camel in body ? camel : (lower in body ? lower : null);
+      if (key !== null) updates[k] = body[key];
     });
     if (!Object.keys(updates).length) return send(res, 400, { error: "No editable fields provided" });
 
@@ -74,7 +78,7 @@ export default async function handler(req, res) {
     const quotedTab = `'${tab.replace(/'/g, "''")}'`;
     const cur = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `${quotedTab}!A:K`,
+      range: `${quotedTab}!A:N`,
       valueRenderOption: "UNFORMATTED_VALUE",
       dateTimeRenderOption: "FORMATTED_STRING",
     });

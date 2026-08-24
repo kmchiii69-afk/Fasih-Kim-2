@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     const sheets = google.sheets({ version: "v4", auth });
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `'${tab.replace(/'/g, "''")}'!A:K`,
+      range: `'${tab.replace(/'/g, "''")}'!A:N`,
       valueRenderOption: "UNFORMATTED_VALUE",
       dateTimeRenderOption: "FORMATTED_STRING",
     });

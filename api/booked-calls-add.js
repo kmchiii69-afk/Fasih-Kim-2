@@ -43,6 +43,7 @@ function safeCell(v) {
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
+  "Triage", "Outcome", "Cash Collected",
 ];
 
 // Format "YYYY-MM-DDTHH:mm" (browser datetime-local input) → "YYYY-MM-DD HH:mm"
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
     // Ensure the header row exists — same seed as webhook.
     const cur = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `${quoteTab(tab)}!A1:K1`,
+      range: `${quoteTab(tab)}!A1:N1`,
     });
     if (!cur.data.values || cur.data.values.length === 0) {
       await sheets.spreadsheets.values.update({
@@ -107,6 +108,9 @@ export default async function handler(req, res) {
       body.qualified || "",
       id,
       body.notes || "",
+      body.triage || "",
+      body.outcome || "",
+      body.cashCollected || "",
     ].map(safeCell);
 
     await sheets.spreadsheets.values.append({

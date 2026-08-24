@@ -50,6 +50,7 @@ function safeCell(v) {
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
+  "Triage", "Outcome", "Cash Collected",
 ];
 
 // Format an ISO datetime as "YYYY-MM-DD HH:mm" in London time (matches webhook)
@@ -177,7 +178,7 @@ export default async function handler(req, res) {
     const sheets = google.sheets({ version: "v4", auth });
     const cur = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `${quoteTab(tab)}!A:K`,
+      range: `${quoteTab(tab)}!A:N`,
       valueRenderOption: "UNFORMATTED_VALUE",
       dateTimeRenderOption: "FORMATTED_STRING",
     });
@@ -227,6 +228,9 @@ export default async function handler(req, res) {
           "" /* Qualified */,
           inv.uri,
           "" /* Notes */,
+          "" /* Triage */,
+          "" /* Outcome */,
+          "" /* Cash Collected */,
         ].map(safeCell));
         existingIds.add(inv.uri); // avoid duplicating within this same backfill run
       }
