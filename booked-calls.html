@@ -48,6 +48,19 @@
   .filter-row .clear-filters{background:transparent;color:var(--muted);border:none;font-size:11.5px;cursor:pointer;font-family:inherit;letter-spacing:.3px;margin-left:auto;padding:6px 10px}
   .filter-row .clear-filters:hover{color:var(--gold)}
   .filter-row .active-count{color:var(--gold);font-size:11px;font-weight:600;letter-spacing:.3px}
+  /* Cash leaderboard — ranks sources by cash collected in current view */
+  .leaderboard{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-top:16px}
+  .leaderboard-header{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .leaderboard-title{font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+  .leaderboard-total{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.3px}
+  .leaderboard-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+  .leader-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;position:relative;overflow:hidden}
+  /* Subtle background bar showing this source's share of total cash */
+  .leader-bar{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(216,169,79,.08),rgba(216,169,79,.02));pointer-events:none}
+  .leader-rank{font-size:15px;min-width:24px;text-align:center;z-index:1}
+  .leader-name{flex:1;text-transform:capitalize;font-weight:600;color:var(--txt);font-size:13px;z-index:1}
+  .leader-cash{color:var(--gold);font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums;z-index:1}
+  .leaderboard-empty{color:var(--muted2);font-size:12.5px;padding:8px 0}
   /* Add booking modal */
   .add-btn{background:var(--grad-gold);color:#241803;border:none;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:700;letter-spacing:.4px;cursor:pointer;font-family:inherit}
   .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:200;padding:24px}
@@ -129,6 +142,8 @@
   </div>
 
   <div class="summary" id="summary"></div>
+
+  <div class="leaderboard" id="leaderboard"></div>
 
   <div class="filter-row" id="filterRow">
     <span class="flabel">Source</span>
@@ -527,12 +542,54 @@
   function renderFiltered() {
     const filtered = applyFilters();
     renderSummary(filtered);
+    renderLeaderboard(filtered);
     renderRows(filtered);
     // Show a count next to the filter row so it's clear something's applied.
     const active = Object.values(FILTERS).filter(Boolean).length;
     $("filterCount").textContent = active
       ? `Showing ${filtered.length} of ${ALL_ROWS.length}`
       : "";
+  }
+
+  // Cash leaderboard — ranks sources by total cash collected in the current
+  // filtered view. Updates whenever filters, date range, or the underlying
+  // data changes. Sources with $0 are excluded so the leaderboard isn't
+  // cluttered with silent zeros. Shows top 6 to keep the row compact.
+  function renderLeaderboard(rows) {
+    const bySource = {};
+    rows.forEach(r => {
+      const src = (String(r.Source || "").trim() || "direct").toLowerCase();
+      const cash = parseCash(r["Cash Collected"]);
+      if (cash > 0) bySource[src] = (bySource[src] || 0) + cash;
+    });
+    const entries = Object.entries(bySource).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const total = Object.values(bySource).reduce((a, b) => a + b, 0);
+    const host = $("leaderboard");
+    if (entries.length === 0) {
+      host.innerHTML = `<div class="leaderboard-header"><div class="leaderboard-title">Cash Leaderboard · by Source</div></div>
+        <div class="leaderboard-empty">No cash collected in this view yet. Fill in the Cash column on rows to see sources ranked here.</div>`;
+      return;
+    }
+    // Medal for top 3, numeric rank for the rest
+    const rankBadge = i => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `<span style="color:var(--muted2)">#${i+1}</span>`;
+    // Max cash for the background-bar percentage — makes the top row a full bar
+    // and everything else proportional to it, so the visual is meaningful.
+    const max = entries[0][1];
+    host.innerHTML = `<div class="leaderboard-header">
+        <div class="leaderboard-title">Cash Leaderboard · by Source</div>
+        <div class="leaderboard-total">Total ${fmtMoney(total)}</div>
+      </div>
+      <div class="leaderboard-rows">
+        ${entries.map(([src, cash], i) => {
+          const pct = max > 0 ? Math.max(4, Math.round((cash / max) * 100)) : 0;
+          return `<div class="leader-row">
+            <div class="leader-bar" style="width:${pct}%"></div>
+            <div class="leader-rank">${rankBadge(i)}</div>
+            <div class="leader-name">${esc(src)}</div>
+            <div class="leader-cash">${fmtMoney(cash)}</div>
+          </div>`;
+        }).join("")}
+      </div>`;
   }
 
   // Build the API URL based on the current mode + picker value.
