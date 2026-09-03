@@ -17,6 +17,7 @@
     --green:#4ade80; --red:#f87171;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
   body{background:var(--bg);color:var(--txt);font-family:'Poppins',sans-serif;font-weight:400;line-height:1.5;min-height:100vh}
   .wrap{max-width:1800px;margin:0 auto;padding:32px 24px}
   .hero{padding-bottom:20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -49,7 +50,7 @@
   .filter-row .clear-filters:hover{color:var(--gold)}
   .filter-row .active-count{color:var(--gold);font-size:11px;font-weight:600;letter-spacing:.3px}
   /* Cash leaderboard — ranks sources by cash collected in current view */
-  .leaderboard{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-top:16px}
+  .leaderboard{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-top:24px;scroll-margin-top:20px}
   .leaderboard-header{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
   .leaderboard-title{font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
   .leaderboard-total{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.3px}
@@ -136,6 +137,7 @@
       <input type="date" id="dateInput">
       <input type="month" id="monthInput" style="display:none">
       <button class="add-btn" id="addBtn">+ Add Booking</button>
+      <a href="#leaderboard" class="refresh-btn" style="text-decoration:none" title="Jump to cash leaderboard">🏆 Leaderboard</a>
       <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
       <span class="status" id="status"><span class="live-dot"></span>Auto-refresh 60s</span>
     </div>
@@ -143,11 +145,11 @@
 
   <div class="summary" id="summary"></div>
 
-  <div class="leaderboard" id="leaderboard"></div>
-
   <div class="filter-row" id="filterRow">
     <span class="flabel">Source</span>
     <select id="filterSource"><option value="">All</option></select>
+    <span class="flabel">Lead Owner</span>
+    <select id="filterLeadOwner"><option value="">All</option></select>
     <span class="flabel">Qualified</span>
     <select id="filterQualified">
       <option value="">All</option>
@@ -159,6 +161,12 @@
     <select id="filterOutcome"><option value="">All</option></select>
     <span class="flabel">Revenue</span>
     <select id="filterRevenue"><option value="">All</option></select>
+    <span class="flabel">Cash</span>
+    <select id="filterCash">
+      <option value="">All</option>
+      <option value="has">Has Cash</option>
+      <option value="none">No Cash</option>
+    </select>
     <span class="active-count" id="filterCount"></span>
     <button class="clear-filters" id="clearFilters">Clear filters</button>
   </div>
@@ -175,7 +183,7 @@
           <th>Phone</th>
           <th>Revenue</th>
           <th>Source</th>
-          <th>Triage</th>
+          <th>Lead Owner</th>
           <th>Qualified?</th>
           <th>Outcome</th>
           <th>Cash</th>
@@ -185,6 +193,8 @@
       <tbody id="tbody"></tbody>
     </table>
   </div>
+
+  <div class="leaderboard" id="leaderboard"></div>
 </div>
 
 <div class="modal-back" id="addModal">
@@ -219,8 +229,8 @@
         <select id="fSource"></select>
       </div>
       <div class="field">
-        <label>Triage</label>
-        <select id="fTriage"></select>
+        <label>Lead Owner</label>
+        <select id="fLeadOwner"></select>
       </div>
     </div>
     <div class="row2">
@@ -272,8 +282,10 @@
   // Source dropdown options — the specific UTM sources you track. Any value
   // from Calendly's utm_source not in this list is preserved and shown as-is.
   const SOURCE_OPTIONS = ["youtube", "george", "tom", "ayoub", "instagram", "ads", "referral", "direct"];
-  // Triage options — who's handling the call (setter/coach who triaged the lead)
-  const TRIAGE_OPTIONS = ["Tom", "Ayoub"];
+  // Lead Owner options — who owns/closes the deal. Any observed value not in
+  // this list is preserved (same pattern as Source), so if you type a new
+  // name into a row's dropdown it stays and shows up in the filter.
+  const LEAD_OWNER_OPTIONS = ["Tom", "Ayoub", "George"];
   // Outcome options — final disposition of the call
   const OUTCOME_OPTIONS = ["Deposit", "PIF", "Half Pay", "Cancelled", "No Show", "Rescheduled", "Offer Didn't Buy", "Bad Fit", "No Close"];
 
@@ -433,7 +445,7 @@
         <td class="contact">${telLink(r.Phone)}</td>
         <td class="revenue">${esc(r["Current Revenue"] || "—")}</td>
         <td>${sourceSelect(r.Source || "direct", id)}</td>
-        <td>${optionSelect("triage", TRIAGE_OPTIONS, r.Triage || "", id, "—")}</td>
+        <td>${optionSelect("leadOwner", LEAD_OWNER_OPTIONS, r["Lead Owner"] || "", id, "—")}</td>
         <td>${qualifiedButtons(r.Qualified, id)}</td>
         <td>${optionSelect("outcome", OUTCOME_OPTIONS, r.Outcome || "", id, "—")}</td>
         <td>${cashInput(r["Cash Collected"], id)}</td>
@@ -447,8 +459,8 @@
   // Optimistic UI: the value's already visible; if the POST fails we flash red.
   function wireRowHandlers() {
     document.querySelectorAll(".source-sel").forEach(sel => {
-      // Save under the field name declared on the element (source / triage / outcome).
-      // Was hardcoded to "source" before, which meant triage/outcome selects would
+      // Save under the field name declared on the element (source / leadOwner / outcome).
+      // Was hardcoded to "source" before, which meant leadOwner/outcome selects would
       // silently overwrite the source column.
       sel.onchange = () => saveField(sel.dataset.id, sel.dataset.field || "source", sel.value);
     });
@@ -501,7 +513,7 @@
   let mode = "day"; // "day" | "month"
   let loading = false;
   let ALL_ROWS = []; // most recent fetch — filters run against this
-  const FILTERS = { source: "", qualified: "", revenue: "", outcome: "" };
+  const FILTERS = { source: "", qualified: "", revenue: "", outcome: "", leadowner: "", cash: "" };
 
   // Populate the source + revenue dropdowns with unique values from the current
   // dataset. Called after every fetch so options match what's actually there.
@@ -512,6 +524,10 @@
     // unusual values already stored in data (defensive if someone typed direct).
     const dataOutcomes = new Set(rows.map(r => String(r.Outcome || "").trim()).filter(Boolean));
     const outcomes = [...OUTCOME_OPTIONS, ...[...dataOutcomes].filter(o => !OUTCOME_OPTIONS.includes(o))];
+    // Same pattern for Lead Owner — presets always present, then anything the
+    // data has that's not in the presets (custom names typed into the dropdown).
+    const dataOwners = new Set(rows.map(r => String(r["Lead Owner"] || "").trim()).filter(Boolean));
+    const owners = [...LEAD_OWNER_OPTIONS, ...[...dataOwners].filter(o => !LEAD_OWNER_OPTIONS.includes(o))];
     const setSel = (id, values, current) => {
       const sel = $(id);
       sel.innerHTML = `<option value="">All</option>` + values.map(v => `<option value="${esc(v)}"${v === current ? " selected" : ""}>${esc(v)}</option>`).join("");
@@ -519,15 +535,24 @@
     setSel("filterSource", sources, FILTERS.source);
     setSel("filterRevenue", revenues, FILTERS.revenue);
     setSel("filterOutcome", outcomes, FILTERS.outcome);
+    setSel("filterLeadOwner", owners, FILTERS.leadowner);
     $("filterQualified").value = FILTERS.qualified;
+    $("filterCash").value = FILTERS.cash;
   }
 
   // Return the subset of ALL_ROWS matching current filter state.
   function applyFilters() {
     return ALL_ROWS.filter(r => {
       if (FILTERS.source && String(r.Source || "").trim() !== FILTERS.source) return false;
+      if (FILTERS.leadowner && String(r["Lead Owner"] || "").trim() !== FILTERS.leadowner) return false;
       if (FILTERS.outcome && String(r.Outcome || "").trim() !== FILTERS.outcome) return false;
       if (FILTERS.revenue && String(r["Current Revenue"] || "").trim() !== FILTERS.revenue) return false;
+      if (FILTERS.cash) {
+        // "has" = any non-zero parsed value. "none" = empty or zero.
+        const has = parseCash(r["Cash Collected"]) > 0;
+        if (FILTERS.cash === "has" && !has) return false;
+        if (FILTERS.cash === "none" && has) return false;
+      }
       if (FILTERS.qualified) {
         const q = String(r.Qualified || "").toLowerCase().trim();
         // "pending" = no explicit yes/no
@@ -632,16 +657,17 @@
   }
 
   // Wire up the filter dropdowns — change re-renders (no fetch).
-  ["filterSource", "filterQualified", "filterRevenue", "filterOutcome"].forEach(id => {
+  ["filterSource", "filterQualified", "filterRevenue", "filterOutcome", "filterLeadOwner", "filterCash"].forEach(id => {
     $(id).addEventListener("change", e => {
+      // Match the FILTERS key: "filterLeadOwner" → "leadowner"
       const key = id.replace("filter", "").toLowerCase();
       FILTERS[key] = e.target.value;
       renderFiltered();
     });
   });
   $("clearFilters").addEventListener("click", () => {
-    FILTERS.source = FILTERS.qualified = FILTERS.revenue = FILTERS.outcome = "";
-    $("filterSource").value = $("filterQualified").value = $("filterRevenue").value = $("filterOutcome").value = "";
+    Object.keys(FILTERS).forEach(k => FILTERS[k] = "");
+    ["filterSource","filterQualified","filterRevenue","filterOutcome","filterLeadOwner","filterCash"].forEach(id => $(id).value = "");
     renderFiltered();
   });
 
@@ -677,8 +703,8 @@
     // Populate the option dropdowns with our preset options
     $("fSource").innerHTML = SOURCE_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
     $("fSource").value = "direct";
-    $("fTriage").innerHTML = `<option value="">—</option>` + TRIAGE_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
-    $("fTriage").value = "";
+    $("fLeadOwner").innerHTML = `<option value="">—</option>` + LEAD_OWNER_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("fLeadOwner").value = "";
     $("fOutcome").innerHTML = `<option value="">—</option>` + OUTCOME_OPTIONS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
     $("fOutcome").value = "";
     // Default booking time = now (input type=datetime-local wants YYYY-MM-DDTHH:mm)
@@ -710,7 +736,7 @@
       phone: $("fPhone").value.trim(),
       revenue: $("fRevenue").value.trim(),
       source: $("fSource").value,
-      triage: $("fTriage").value,
+      leadOwner: $("fLeadOwner").value,
       outcome: $("fOutcome").value,
       qualified: $("fQualified").value,
       bookingTime: $("fBookingTime").value,
