@@ -50,7 +50,7 @@ function safeCell(v) {
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
-  "Triage", "Outcome", "Cash Collected",
+  "Lead Owner", "Outcome", "Cash Collected",
 ];
 
 // Format an ISO datetime as "YYYY-MM-DD HH:mm" in London time (matches webhook)
@@ -228,7 +228,7 @@ export default async function handler(req, res) {
           "" /* Qualified */,
           inv.uri,
           "" /* Notes */,
-          "" /* Triage */,
+          "" /* Lead Owner */,
           "" /* Outcome */,
           "" /* Cash Collected */,
         ].map(safeCell));

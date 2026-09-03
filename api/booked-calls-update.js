@@ -60,7 +60,7 @@ export default async function handler(req, res) {
     }
     // Only these fields are user-editable via this endpoint. Everything else
     // is set by the webhook and stays authoritative to Calendly.
-    const EDITABLE = ["Qualified", "Source", "Notes", "Triage", "Outcome", "Cash Collected"];
+    const EDITABLE = ["Qualified", "Source", "Notes", "Lead Owner", "Outcome", "Cash Collected"];
     const updates = {};
     EDITABLE.forEach(k => {
       // Two accepted JSON key forms so the frontend has flexibility:

@@ -43,7 +43,7 @@ function safeCell(v) {
 const HEADERS = [
   "Booking Time", "Call Time", "Name", "Email", "Instagram",
   "Phone", "Current Revenue", "Source", "Qualified", "Calendly ID", "Notes",
-  "Triage", "Outcome", "Cash Collected",
+  "Lead Owner", "Outcome", "Cash Collected",
 ];
 
 // Format "YYYY-MM-DDTHH:mm" (browser datetime-local input) → "YYYY-MM-DD HH:mm"
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
       body.qualified || "",
       id,
       body.notes || "",
-      body.triage || "",
+      body.leadOwner || "",
       body.outcome || "",
       body.cashCollected || "",
     ].map(safeCell);
