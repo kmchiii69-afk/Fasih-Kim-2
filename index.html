@@ -1463,8 +1463,14 @@ function syncCustomTabsUI(){
     page.innerHTML=`<div class="hero"><h1>${esc(t.name)} <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
       <div class="phead" style="margin:32px 0 18px">
       <div style="flex:1" class="tab-filter" id="${t.id}FilterHost"></div>
-      <div class="phead-actions"><button class="btn" data-addwidget="${t.id}">+ Add Widget</button><button class="btn edit-only" data-reset="${t.id}">Reset Layout</button><button class="btn" data-deltab="${t.id}">Delete Tab</button></div></div>
-      <div class="customHost"></div>`;
+      <div class="phead-actions">
+        <div class="view-toggle" data-tab="${t.id}"><button class="vt-btn active" data-view="widgets">Widgets</button><button class="vt-btn" data-view="funnel">Funnel</button></div>
+        <button class="btn" data-addwidget="${t.id}">+ Add Widget</button>
+        <button class="btn edit-only" data-reset="${t.id}">Reset Layout</button>
+        <button class="btn" data-deltab="${t.id}">Delete Tab</button>
+      </div></div>
+      <div class="customHost"></div>
+      <div class="funnelHost" data-tab="${t.id}" style="display:none"></div>`;
     main.appendChild(page);
   });
   applyTabOrder();
