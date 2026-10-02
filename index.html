@@ -196,6 +196,41 @@ body.editing .edit-only{display:inline-flex}
 .wsub{font-size:10.5px;color:var(--muted);margin-top:3px;font-weight:400}
 .custom-sec{display:flex;align-items:center;gap:12px}.custom-sec h2{margin:0}.custom-sec .rule{flex:1}
 .phead-actions .btn,.custom-sec .btn{white-space:nowrap}
+.view-toggle{display:inline-flex;background:#1c1812;border:1px solid #352a1e;border-radius:8px;padding:2px}
+.view-toggle .vt-btn{background:transparent;color:var(--muted);border:none;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-radius:6px;letter-spacing:.3px;transition:all .15s}
+.view-toggle .vt-btn:hover{color:var(--txt)}
+.view-toggle .vt-btn.active{background:rgba(216,169,79,.18);color:var(--gold)}
+.funnel-sec{margin-top:12px}
+.funnel-sec .funnel-title{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:22px 0 10px}
+.funnel-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.funnel-input-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.funnel-input-card .fin-label{font-size:11.5px;color:var(--muted);font-weight:500;margin-bottom:8px}
+.funnel-input-card .fin-value{font-size:26px;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.funnel-input-card .fin-prev{font-size:11px;color:var(--muted2);margin-top:6px}
+.funnel-input-card .fin-prev .delta-up{color:#4ade80}
+.funnel-input-card .fin-prev .delta-dn{color:#f87171}
+.funnel-table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow-x:auto}
+.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+.funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:var(--panel-alt)}
+.funnel-table th.num,.funnel-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.funnel-table td{padding:12px 14px;border-bottom:1px solid #221c14}
+.funnel-table tbody tr:last-child td{border-bottom:none}
+.funnel-table tbody tr:hover{background:rgba(216,169,79,.03)}
+.funnel-table .stage-num{color:var(--muted2);font-weight:600;width:30px}
+.funnel-table .stage-name{font-weight:600;color:var(--txt)}
+.funnel-table .conv{color:var(--gold);font-weight:600}
+.funnel-table .conv.dim{color:var(--muted2);font-weight:400}
+.funnel-table .delta-up{color:#4ade80;font-size:11px;margin-left:6px}
+.funnel-table .delta-dn{color:#f87171;font-size:11px;margin-left:6px}
+.funnel-empty{padding:40px;text-align:center;color:var(--muted2);font-size:13px}
+.funnel-empty .btn{margin-top:14px}
+/* Funnel config modal rows */
+.fnl-cfg-rows{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-right:4px}
+.fnl-cfg-row{display:grid;grid-template-columns:30px minmax(140px,1fr) minmax(140px,1fr) minmax(200px,2fr) 30px;gap:8px;align-items:center;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px}
+.fnl-cfg-row .stage-idx{color:var(--gold);font-weight:700;font-size:13px;text-align:center}
+.fnl-cfg-row input,.fnl-cfg-row select{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+.fnl-cfg-row .rm{background:transparent;color:#f87171;border:none;cursor:pointer;font-size:14px}
+.fnl-cfg-sec-title{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:16px 0 8px}
 .wb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
 .wb-overlay.show{display:flex}
 .wb-modal{background:#14110b;border:1px solid var(--line-str);border-radius:16px;width:min(540px,96vw);max-height:90vh;display:flex;flex-direction:column}
@@ -221,6 +256,7 @@ body.editing .edit-only{display:inline-flex}
     <div class="tabs">
       <div class="tab active" data-page="ceo"><span class="dia">◆</span> CEO</div>
       <div class="tab" data-page="setter"><span class="dia">◆</span> Setter</div>
+      <div class="tab" data-page="dialing"><span class="dia">◆</span> Dialing</div>
       <div class="tab" data-page="closer"><span class="dia">◆</span> Closer</div>
       <div class="tab addtab" id="addTabBtn" title="Add a custom tab">+ Tab</div>
       <div class="tab mgrbtn" id="manageTabsBtn" title="Rename or reorder tabs">⚙</div>
@@ -251,15 +287,40 @@ body.editing .edit-only{display:inline-flex}
     <div class="hero"><h1>Setter <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
     <div class="phead" style="margin:32px 0 18px">
       <div style="flex:1" class="tab-filter" id="setterFilterHost"></div>
-      <div class="phead-actions"><button class="btn" data-addwidget="setter">+ Add Widget</button><button class="btn edit-only" data-reset="setter">Reset Layout</button></div></div>
+      <div class="phead-actions">
+        <div class="view-toggle" data-tab="setter"><button class="vt-btn active" data-view="widgets">Widgets</button><button class="vt-btn" data-view="funnel">Funnel</button></div>
+        <button class="btn" data-addwidget="setter">+ Add Widget</button>
+        <button class="btn" data-funnel-cfg="setter" style="display:none">Configure Funnel</button>
+        <button class="btn edit-only" data-reset="setter">Reset Layout</button>
+      </div></div>
     <div class="customHost" data-tab="setter"></div>
+    <div class="funnelHost" data-tab="setter" style="display:none"></div>
   </div>
   <div class="page" id="page-closer">
     <div class="hero"><h1>Closer <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
     <div class="phead" style="margin:32px 0 18px">
       <div style="flex:1"></div>
-      <div class="phead-actions"><button class="btn" data-addwidget="closer">+ Add Widget</button><button class="btn edit-only" data-reset="closer">Reset Layout</button></div></div>
+      <div class="phead-actions">
+        <div class="view-toggle" data-tab="closer"><button class="vt-btn active" data-view="widgets">Widgets</button><button class="vt-btn" data-view="funnel">Funnel</button></div>
+        <button class="btn" data-addwidget="closer">+ Add Widget</button>
+        <button class="btn" data-funnel-cfg="closer" style="display:none">Configure Funnel</button>
+        <button class="btn edit-only" data-reset="closer">Reset Layout</button>
+      </div></div>
     <div class="customHost" data-tab="closer"></div>
+    <div class="funnelHost" data-tab="closer" style="display:none"></div>
+  </div>
+  <div class="page" id="page-dialing">
+    <div class="hero"><h1>Dialing <span class="gold">Dashboard</span></h1><div class="divider"></div></div>
+    <div class="phead" style="margin:32px 0 18px">
+      <div style="flex:1" class="tab-filter" id="dialingFilterHost"></div>
+      <div class="phead-actions">
+        <div class="view-toggle" data-tab="dialing"><button class="vt-btn active" data-view="widgets">Widgets</button><button class="vt-btn" data-view="funnel">Funnel</button></div>
+        <button class="btn" data-addwidget="dialing">+ Add Widget</button>
+        <button class="btn" data-funnel-cfg="dialing" style="display:none">Configure Funnel</button>
+        <button class="btn edit-only" data-reset="dialing">Reset Layout</button>
+      </div></div>
+    <div class="customHost" data-tab="dialing"></div>
+    <div class="funnelHost" data-tab="dialing" style="display:none"></div>
   </div>
 </div>
 
@@ -546,11 +607,16 @@ function cAgg(spec,from,to,rowFilter){
       const orows=os.rows.filter(r=>passes(r,op.src,odc,os,op.where));
       vals[op.letter]=orows.reduce((a,r)=>a+toNum(r[oc]),0);
     });
-    const letters=operands.map(o=>o.letter);
-    // Ensure any letter referenced in the expression but missing still gets 0
-    // so the Function() call doesn't throw ReferenceError.
-    letters.forEach(l=>{if(!(l in vals))vals[l]=0});
-    try{return Function(...letters,"return ("+(spec.expr||"A")+")")(...letters.map(l=>vals[l]))}catch(e){return 0}
+    // Extract letters actually referenced in the expression — a widget can
+    // reference letters not present in operands (e.g. user removed operand C
+    // but expression still says "A + B + C + D"). Missing letters default
+    // to 0 so the widget doesn't silently crash to zero.
+    const exprLetters = new Set();
+    const exprMatch = String(spec.expr||"A").match(/\b[A-Z]\b/g);
+    if(exprMatch) exprMatch.forEach(l => exprLetters.add(l));
+    const allLetters = [...new Set([...operands.map(o=>o.letter), ...exprLetters])];
+    allLetters.forEach(l => { if(!(l in vals)) vals[l] = 0; });
+    try{return Function(...allLetters,"return ("+(spec.expr||"A")+")")(...allLetters.map(l=>vals[l]))}catch(e){console.warn("[widget "+spec.id+"] expression error:", e.message); return 0}
   }
   return sumCol(colR)+extraTotal; // default sum (with multi-source support)
 }
@@ -1094,6 +1160,11 @@ function buildPiece(tab,orderKey,ctx){
 // classic look is preserved.
 function renderTab(tab){
   const page=document.getElementById("page-"+tab);if(!page)return;
+  // Make sure the view toggle buttons reflect the saved view for this tab, and
+  // show/hide the correct host + the Configure Funnel button.
+  applyViewMode(tab);
+  const view=getViewMode(tab);
+  if(view==="funnel"){renderFunnelView(tab);return}
   const host=page.querySelector(".customHost");if(!host)return;
   const {from,to}=getRange();
   const subEl=page.querySelector(".subline, .sub");
@@ -1121,9 +1192,235 @@ function renderTab(tab){
   pieces.forEach(p=>{if(p.after)p.after()});
 }
 
+/* ═══════════════ FUNNEL VIEW ═══════════════
+ * Alternate layout for Setter/Dialing/Closer tabs: an "Inputs" row of activity
+ * scorecards + a Funnel table where each stage shows the current period, the
+ * previous same-length period, and the conversion % from the stage above.
+ * Config lives in CFG.funnelConfig[tab] = { inputs:[{label,src,col,dateCol}],
+ *   stages:[{label,src,col,dateCol}] }.
+ */
+function getViewMode(tab){
+  const stored=localStorage.getItem("kpi_view_"+tab);
+  return stored==="funnel"?"funnel":"widgets";
+}
+function setViewMode(tab,mode){
+  localStorage.setItem("kpi_view_"+tab,mode==="funnel"?"funnel":"widgets");
+}
+function applyViewMode(tab){
+  const page=document.getElementById("page-"+tab);if(!page)return;
+  const view=getViewMode(tab);
+  const toggle=page.querySelector('.view-toggle[data-tab="'+tab+'"]');
+  if(toggle)toggle.querySelectorAll(".vt-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  const customHost=page.querySelector(".customHost");
+  const funnelHost=page.querySelector(".funnelHost");
+  if(customHost)customHost.style.display=view==="widgets"?"":"none";
+  if(funnelHost)funnelHost.style.display=view==="funnel"?"":"none";
+  // Hide "+ Add Widget" + Reset in funnel view (they only apply to widgets layout).
+  // Configure Funnel button is no longer needed — funnel view auto-reads the tab's cards.
+  const addBtn=page.querySelector('[data-addwidget="'+tab+'"]');
+  const resetBtn=page.querySelector('[data-reset="'+tab+'"]');
+  const cfgBtn=page.querySelector('[data-funnel-cfg="'+tab+'"]');
+  if(addBtn)addBtn.style.display=view==="widgets"?"":"none";
+  if(resetBtn)resetBtn.style.display=view==="widgets"?"":"none";
+  if(cfgBtn)cfgBtn.style.display="none";
+}
+// Previous period of the same length as [from,to] — used for the "Last wk" column.
+function prevPeriod(from,to){
+  const days=Math.max(1,Math.floor((to.getTime()-from.getTime())/86400000)+1);
+  const pTo=new Date(from.getTime()-1);
+  const pFrom=new Date(from.getTime()-days*86400000);
+  return {from:pFrom,to:pTo};
+}
+// Sum a {src,col,dateCol} spec over [from,to]. Shared by inputs + stages.
+function sumFunnelField(spec,from,to,rowFilter){
+  if(!spec||!spec.src||!spec.col)return 0;
+  const src=SRC[spec.src];if(!src)return 0;
+  const dc=spec.dateCol?resolveCol(src,spec.dateCol):null;
+  const col=resolveCol(src,spec.col);if(!col)return 0;
+  const rows=src.rows.filter(r=>{
+    if(rowFilter&&!rowFilter(r,spec.src))return false;
+    if(!dc)return true;
+    const d=toDate(r[dc]);return d&&inR(d,from,to);
+  });
+  return rows.reduce((a,r)=>a+toNum(r[col]),0);
+}
+function renderFunnelView(tab){
+  const page=document.getElementById("page-"+tab);if(!page)return;
+  const host=page.querySelector(".funnelHost");if(!host)return;
+  const {from,to}=getRange();
+  const pp=prevPeriod(from,to);
+  const filter=getTabFilter(tab);
+  const ctxCur=ctxForRange(tab,from,to);if(filter)ctxCur.rowFilter=filter.rowFilter;
+  const ctxPrev=ctxForRange(tab,pp.from,pp.to);if(filter)ctxPrev.rowFilter=filter.rowFilter;
+  // READ-ONLY MIRROR of the live Widgets view:
+  // - We walk CFG.order[tab] (the exact persisted order from the shared config)
+  // - For built-ins we call the same BUILTIN_COMPUTE function the card uses in Widgets view
+  // - For custom widgets we call cAgg with the same spec stored in CFG.widgets
+  // - Nothing in CFG is mutated — switching tabs/views leaves the dashboard untouched
+  // - Hidden built-ins (CFG.hiddenWidgets) are honoured so the funnel matches what's actually on screen
+  const hidden=new Set(CFG.hiddenWidgets||[]);
+  const order=(CFG.order[tab]||[]).filter(k=>!hidden.has(k));
+  const cards=order.map(k=>{
+    const parsed=parseKey(k);
+    if(parsed.kind==="builtin"){
+      const def=findBuiltinDef(parsed.tab,parsed.key);
+      if(!def||def.type!=="card")return null;
+      const fn=BUILTIN_COMPUTE[def.compute];if(!fn)return null;
+      try{
+        const cur=fn(ctxCur),prev=fn(ctxPrev);
+        return {label:def.title,fmt:cur?.fmt||"number",cur:cur?.value||0,prev:prev?.value||0,sub:cur?.sub||""};
+      }catch(e){return null}
+    }
+    const w=(CFG.widgets||[]).find(x=>x.id===parsed.id);
+    if(!w||w.type!=="card")return null;
+    try{
+      const cur=cAgg(w,from,to,ctxCur.rowFilter),prev=cAgg(w,pp.from,pp.to,ctxPrev.rowFilter);
+      return {label:w.title||w.col,fmt:w.fmt||"number",cur:cur||0,prev:prev||0,sub:w.sub||""};
+    }catch(e){return null}
+  }).filter(Boolean);
+  if(!cards.length){
+    host.innerHTML=`<div class="funnel-empty">
+      <div style="font-size:14px;color:var(--txt);margin-bottom:4px">No metrics to show yet.</div>
+      <div>Add scorecards to this tab in Widgets view, then switch back to Funnel.</div>
+    </div>`;
+    return;
+  }
+  const fmtVal=(v,fmt)=>{
+    if(fmt==="money")return "$"+Math.round(v).toLocaleString();
+    if(fmt==="percent")return (isFinite(v)?(v*100).toFixed(1):"0.0")+"%";
+    return Math.round(v).toLocaleString();
+  };
+  // Conv % only makes sense between "count-like" rows, not between a $ card and
+  // a number card. Keep it computed on raw numeric value — users reading the
+  // mockup understand each row's absolute value stands on its own too.
+  let html=`<div class="funnel-title">Funnel · ${esc(BUILTIN_TAB_DEFAULTS[tab]||tab)}</div>`;
+  html+=`<div class="funnel-table-wrap"><table class="funnel-table">
+    <thead><tr>
+      <th>#</th><th>Metric</th>
+      <th class="num">This period</th>
+      <th class="num">Conv. % from prev</th>
+      <th class="num">Last period</th>
+      <th class="num">Change</th>
+    </tr></thead><tbody>`;
+  let prevRaw=null;
+  cards.forEach((c,i)=>{
+    let convTxt="—";
+    if(prevRaw!==null&&c.fmt!=="percent"){
+      convTxt=prevRaw>0?((c.cur/prevRaw)*100).toFixed(1)+"%":"—";
+    }
+    const delta=c.cur-c.prev;
+    const deltaCls=delta>0?"delta-up":(delta<0?"delta-dn":"");
+    const deltaSign=delta>0?"▲":(delta<0?"▼":"·");
+    html+=`<tr>
+      <td class="stage-num">${i+1}</td>
+      <td class="stage-name">${esc(c.label)}${c.sub?`<div style="font-size:10.5px;color:var(--muted2);font-weight:400;margin-top:2px">${esc(c.sub)}</div>`:""}</td>
+      <td class="num">${fmtVal(c.cur,c.fmt)}</td>
+      <td class="num conv ${convTxt==="—"?'dim':''}">${convTxt}</td>
+      <td class="num">${fmtVal(c.prev,c.fmt)}</td>
+      <td class="num"><span class="${deltaCls}">${deltaSign} ${fmtVal(Math.abs(delta),c.fmt)}</span></td>
+    </tr>`;
+    if(c.fmt!=="percent")prevRaw=c.cur;
+  });
+  html+=`</tbody></table></div>`;
+  host.innerHTML=html;
+}
+
+/* Funnel configuration modal — one row per stage/input, user picks source + column */
+function openFunnelConfig(tab){
+  CFG.funnelConfig=CFG.funnelConfig||{};
+  CFG.funnelConfig[tab]=CFG.funnelConfig[tab]||{inputs:[],stages:[]};
+  const cfg=CFG.funnelConfig[tab];
+  // Build an overlay that matches the dashboard's existing modal pattern.
+  let ov=document.getElementById("funnelCfgOv");
+  if(!ov){ov=document.createElement("div");ov.id="funnelCfgOv";ov.className="overlay";document.body.appendChild(ov)}
+  const srcOpts=sel=>CFG.sources.map(s=>`<option value="${esc(s.id)}" ${s.id===sel?'selected':''}>${esc(s.name)}</option>`).join("");
+  const colList=sid=>{const s=SRC[sid];return s?s.headers||[]:[]};
+  const rowHtml=(item,i,kind)=>{
+    const sid=item.src||CFG.sources[0]?.id||"";
+    const headers=colList(sid);
+    return `<div class="fnl-cfg-row" data-i="${i}" data-kind="${kind}">
+      <div class="stage-idx">${i+1}</div>
+      <input class="fnl-label" placeholder="Label (e.g. New conversations)" value="${esc(item.label||'')}">
+      <select class="fnl-src">${srcOpts(sid)}</select>
+      <input class="fnl-col colsearch" list="fnl-dl-${kind}-${i}" placeholder="Column name" value="${esc(item.col||'')}">
+      <datalist id="fnl-dl-${kind}-${i}">${headers.map(h=>`<option value="${esc(h)}"></option>`).join("")}</datalist>
+      <button class="rm" title="Remove">✕</button>
+    </div>`;
+  };
+  const collect=()=>{
+    const readRows=(listId)=>[...ov.querySelectorAll("#"+listId+" .fnl-cfg-row")].map(row=>({
+      label:row.querySelector(".fnl-label").value.trim(),
+      src:row.querySelector(".fnl-src").value,
+      col:row.querySelector(".fnl-col").value.trim(),
+      dateCol:guessDateCol(row.querySelector(".fnl-src").value),
+    })).filter(x=>x.src&&x.col);
+    cfg.inputs=readRows("fnl-inputs-list");
+    cfg.stages=readRows("fnl-stages-list");
+  };
+  const wire=()=>{
+    ov.querySelectorAll(".fnl-cfg-row .fnl-src").forEach(sel=>{
+      sel.onchange=()=>{
+        const row=sel.closest(".fnl-cfg-row");
+        const sid=sel.value;
+        const dlId=row.querySelector(".fnl-col").getAttribute("list");
+        const dl=document.getElementById(dlId);
+        if(dl)dl.innerHTML=(colList(sid)||[]).map(h=>`<option value="${esc(h)}"></option>`).join("");
+      };
+    });
+    ov.querySelectorAll(".fnl-cfg-row .rm").forEach(b=>{
+      b.onclick=()=>{
+        const row=b.closest(".fnl-cfg-row");
+        const i=+row.dataset.i,kind=row.dataset.kind;
+        collect();
+        if(kind==="input")cfg.inputs.splice(i,1);else cfg.stages.splice(i,1);
+        render();
+      };
+    });
+  };
+  const render=()=>{
+    ov.querySelector("#fnl-inputs-list").innerHTML=cfg.inputs.map((it,i)=>rowHtml(it,i,"input")).join("")||`<div style="color:var(--muted2);font-size:12px;padding:8px">No inputs yet. Click + Add input.</div>`;
+    ov.querySelector("#fnl-stages-list").innerHTML=cfg.stages.map((it,i)=>rowHtml(it,i,"stage")).join("")||`<div style="color:var(--muted2);font-size:12px;padding:8px">No stages yet. Click + Add stage.</div>`;
+    wire();
+  };
+  ov.innerHTML=`<div class="modal" style="width:860px">
+    <div class="modal-head"><h3>Configure Funnel · ${esc(BUILTIN_TAB_DEFAULTS[tab]||tab)}</h3><button class="btn" id="fnl-x">✕</button></div>
+    <div class="modal-body">
+      <div class="fnl-cfg-sec-title">Inputs (activity scorecards at the top)</div>
+      <div id="fnl-inputs-list" class="fnl-cfg-rows"></div>
+      <button class="btn" id="fnl-add-input" style="margin-top:8px">+ Add input</button>
+      <div class="fnl-cfg-sec-title">Funnel stages (ordered top → bottom)</div>
+      <div id="fnl-stages-list" class="fnl-cfg-rows"></div>
+      <button class="btn" id="fnl-add-stage" style="margin-top:8px">+ Add stage</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="fnl-cancel">Cancel</button>
+      <button class="btn primary" id="fnl-save">Save</button>
+    </div></div>`;
+  ov.style.display="flex";
+  render();
+  ov.querySelector("#fnl-add-input").onclick=()=>{collect();cfg.inputs.push({label:"",src:CFG.sources[0]?.id||"",col:"",dateCol:""});render()};
+  ov.querySelector("#fnl-add-stage").onclick=()=>{collect();cfg.stages.push({label:"",src:CFG.sources[0]?.id||"",col:"",dateCol:""});render()};
+  const close=()=>{ov.style.display="none"};
+  ov.querySelector("#fnl-cancel").onclick=close;
+  ov.querySelector("#fnl-x").onclick=close;
+  ov.onclick=e=>{if(e.target===ov)close()};
+  ov.querySelector("#fnl-save").onclick=()=>{
+    collect();
+    saveSharedCfg();
+    close();
+    renderTab(tab);
+  };
+}
+// Pick the first date-like column from a source as the default date filter column.
+function guessDateCol(srcId){
+  const s=SRC[srcId];if(!s)return "";
+  const h=(s.headers||[]).find(isDateCol);
+  return h||"";
+}
+
 function setConn(t){if(t==="live"){STATUS.type="live";STATUS.text="Live · Sheets"}else if(t==="err"){STATUS.type="err";STATUS.text="Fetch failed"}else{STATUS.type="demo";STATUS.text="Demo data"}}
 function rerenderTabWidgets(tabId){renderTab(tabId)}
-function fullRender(){["ceo","setter","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
+function fullRender(){["ceo","setter","dialing","closer"].forEach(renderTab);(CFG.customTabs||[]).forEach(t=>renderTab(t.id))}
 
 // Renders the per-tab filter dropdown. Any tab where a name column can be
 // detected (built-in OR custom) will show a filter. For built-in tabs the
@@ -1180,7 +1477,7 @@ function syncCustomTabsUI(){
  * CFG.tabLabels[id]  → optional custom display name (overrides built-in default or custom tab's own name)
  * CFG.tabOrder       → array of tab IDs in desired left-to-right order (defaults to hardcoded, then custom in creation order)
  */
-const BUILTIN_TAB_DEFAULTS={ceo:"CEO",setter:"Setter",closer:"Closer"};
+const BUILTIN_TAB_DEFAULTS={ceo:"CEO",setter:"Setter",dialing:"Dialing",closer:"Closer"};
 function defaultTabName(id){
   if(BUILTIN_TAB_DEFAULTS[id])return BUILTIN_TAB_DEFAULTS[id];
   const c=(CFG.customTabs||[]).find(t=>t.id===id);
@@ -1840,6 +2137,20 @@ function initEvents(){
   // Apply saved order + labels once on first paint so a shared config takes
   // effect for anyone opening the dashboard, not just after they change something.
   applyTabOrder();applyTabLabels();applyTabVisibility();
+  // View toggle (Widgets / Funnel) + Configure Funnel button — delegated so
+  // custom tabs created later could support it too, though for v1 it's wired
+  // only on the built-in Setter/Dialing/Closer tabs that have the toggle in markup.
+  document.body.addEventListener("click",e=>{
+    const vt=e.target.closest(".vt-btn");
+    if(vt){
+      const tab=vt.parentElement.dataset.tab;
+      setViewMode(tab,vt.dataset.view);
+      renderTab(tab);
+      return;
+    }
+    const cfg=e.target.closest("[data-funnel-cfg]");
+    if(cfg){openFunnelConfig(cfg.dataset.funnelCfg);return}
+  });
   // Delegated widget controls — works for both built-in and custom widgets.
   document.body.addEventListener("click",e=>{
     const b=e.target.closest(".wbtn");if(!b)return;
