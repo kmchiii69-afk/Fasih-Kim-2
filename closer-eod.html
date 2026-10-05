@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Closer EOD — George</title>
+<title>Closer EOD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -25,14 +25,6 @@
   .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .subline{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap}
   .subline .dia{color:var(--gold);font-size:9px}
-  .date-edit{display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-decoration:underline dotted rgba(216,169,79,.45);text-underline-offset:3px;color:var(--muted);transition:color .15s;background:transparent;border:0;padding:0;font:inherit;font-size:inherit;letter-spacing:inherit}
-  .date-edit:hover{color:var(--gold)}
-  .date-edit:focus-visible{outline:1px dashed var(--gold);outline-offset:3px;border-radius:2px}
-  .date-edit-icon{font-size:11px;color:var(--gold);opacity:.8}
-  .date-edit:hover .date-edit-icon{opacity:1}
-  /* The hidden picker input — sized 1×1 px so the native picker has a real
-     position to anchor to, but it's invisible and ignored by keyboard nav. */
-  #dateInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0;color-scheme:dark}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
   .callout b{color:var(--gold-lite)}
@@ -124,12 +116,12 @@
 
   <div class="hero">
     <h1>End of Day <span class="gold">Report</span></h1>
-    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <button type="button" class="date-edit" id="dateEditBtn" title="Click to change submission date"><span id="dateText"></span> <span class="date-edit-icon">✎</span></button><input type="date" id="dateInput" tabindex="-1" aria-hidden="true"> <span class="dia">◆</span> <span id="srcLbl"></span></div>
+    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span id="dateLbl"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
     <div class="divider"></div>
   </div>
 
   <div class="callout" id="callout">
-    <b>@George</b> — auto-filled from <b id="callCount">5</b> Fathom calls today. Review the calls below, verify the auto-filled metrics, complete the three you fill manually, then submit. It posts to the dashboard the moment you hit submit.
+    <b id="pingTag">@George</b> — auto-filled from <b id="callCount">5</b> Fathom calls today. Review the calls below, verify the auto-filled metrics, complete the three you fill manually, then submit. It posts to the dashboard the moment you hit submit.
   </div>
 
   <div class="sec"><h2>Today's Calls</h2><span class="small">tap a lead to see the ICP breakdown</span><div class="rule"></div></div>
@@ -155,12 +147,6 @@
     <input type="text" id="nsInput" placeholder="Type a name and press Enter…">
     <div class="hint">Each name you add bumps the No-Shows count above. These flow into the dashboard's no-show list.</div>
   </div>
-  <div class="chipbox" style="margin-top:13px">
-    <div class="mlabel">Names of Leads who Cancelled <span class="badge fill">YOU</span></div>
-    <div class="chips" id="cnChips"></div>
-    <input type="text" id="cnInput" placeholder="Type a name and press Enter…">
-    <div class="hint">Each name you add bumps the Cancellations count above. These flow into the dashboard's cancellations list.</div>
-  </div>
 </div>
 
 <div class="bar">
@@ -176,6 +162,14 @@
 <script>
 const QUALIFY_AT=65;
 const API_BASE=""; // same Vercel project serves the form + /api functions
+// Which closer this form belongs to. Supported values are the keys in
+// CLOSER_<NAME>_EMAIL env vars on the backend (George, Abhishek, ...).
+// Bookmark /closer-eod.html?closer=abhishek for Abhishek's dedicated form.
+const CLOSER=(new URLSearchParams(location.search).get("closer")||"George").trim();
+const CLOSER_DISP=CLOSER.charAt(0).toUpperCase()+CLOSER.slice(1).toLowerCase();
+document.title="Closer EOD — "+CLOSER_DISP;
+if(document.getElementById("who"))document.getElementById("who").textContent=CLOSER_DISP;
+if(document.getElementById("pingTag"))document.getElementById("pingTag").textContent="@"+CLOSER_DISP;
 // CALLS is filled live from /api/eod-extract (Fathom → Claude). Starts empty.
 let CALLS=[];
 
@@ -186,66 +180,10 @@ const isQ=c=>totalScore(c.factors)>=QUALIFY_AT;
 function band(s){return s>=85?"s-top":s>=65?"s-strong":s>=45?"s-partial":s>=25?"s-weak":"s-no"}
 
 let noShows=[];
-let cancelled=[];
 let submitted=false;
-let dateKey=new Date().toISOString().slice(0,10);
-let dateLbl=fmtDateLbl(dateKey);
-function fmtDateLbl(key){
-  // Parse as a calendar date (no UTC drift) so 2026-06-16 stays Tuesday.
-  const [y,m,d]=key.split("-").map(Number);
-  return new Date(y,m-1,d).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-}
-$("dateText").textContent=dateLbl;
-$("dateInput").value=dateKey;
-$("dateInput").max=new Date().toISOString().slice(0,10); // no future-dating
-// Date picking wiring. The visible <button> opens the picker; the hidden
-// <input type="date"> receives the picked value and fires `change`.
-const _onDatePicked=()=>{const v=$("dateInput").value;if(v)setDate(v)};
-$("dateInput").addEventListener("change",_onDatePicked);
-$("dateInput").addEventListener("input",_onDatePicked);
-$("dateEditBtn").addEventListener("click",()=>{
-  const inp=$("dateInput");
-  if(inp.showPicker){
-    try{inp.showPicker()}
-    catch(err){console.warn("showPicker failed, falling back to click+focus:",err);inp.focus();inp.click()}
-  }else{
-    // Older browser fallback — focus + click, which opens the picker on most engines.
-    inp.focus();inp.click();
-  }
-});
-
-function hasContent(){
-  // Anything filled? Any auto field non-zero, any chip, or m_cancel/m_noshow > 0.
-  const autoFilled=AUTO.some(([id])=>+$(id).value>0);
-  return autoFilled||cancelled.length>0||noShows.length>0||(+$("m_cancel").value||0)>0||(+$("m_noshow").value||0)>0;
-}
-function resetForm(){
-  AUTO.forEach(([id])=>{const el=$(id);if(el)el.value=0});
-  $("m_cancel").value=0;$("m_noshow").value=0;
-  noShows.length=0;cancelled.length=0;syncNoShow();syncCancel();
-  submitted=false;lock(false);
-  $("submitBtn").textContent="Submit EOD";$("submitBtn").classList.remove("done");
-  $("status").textContent="";$("reopenBtn").style.display="none";
-  $("callout").innerHTML="<b>@George</b> — auto-filled from <b id=\"callCount\">"+CALLS.length+"</b> Fathom calls today. Review the calls below, verify the auto-filled metrics, complete the three you fill manually, then submit. It posts to the dashboard the moment you hit submit.";
-  updateSummary();
-}
-function setDate(newKey){
-  if(!newKey||newKey===dateKey){$("dateInput").value=dateKey;return}
-  // If the form has unsaved data, confirm before swapping context.
-  if(!submitted&&hasContent()){
-    if(!confirm("Discard current data and load the EOD for "+fmtDateLbl(newKey)+"?")){
-      $("dateInput").value=dateKey;return;
-    }
-  }
-  dateKey=newKey;dateLbl=fmtDateLbl(newKey);
-  $("dateText").textContent=dateLbl;$("dateInput").value=dateKey;
-  resetForm();
-  // Show a "loading" state while we swap to the new day's calls.
-  $("callout").innerHTML="<b>Loading calls for "+dateLbl+"…</b>";
-  loadCalls(); // pull Fathom calls for the new date
-  loadSaved(); // restore a prior submission for that date, if any
-}
-
+const dateKey=new Date().toISOString().slice(0,10);
+const dateLbl=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+$("dateLbl").textContent=dateLbl;
 $("callCount").textContent=CALLS.length;
 
 function renderCalls(){
@@ -291,37 +229,26 @@ function renderAuto(){
 
 function renderChips(){
   $("nsChips").innerHTML=noShows.map((n,i)=>`<span class="chip">${n}<x data-i="${i}">×</x></span>`).join("");
-  document.querySelectorAll("#nsChips x").forEach(x=>x.onclick=()=>{noShows.splice(+x.dataset.i,1);syncNoShow()});
+  document.querySelectorAll(".chip x").forEach(x=>x.onclick=()=>{noShows.splice(+x.dataset.i,1);syncNoShow()});
 }
 function syncNoShow(){renderChips();$("m_noshow").value=noShows.length;updateSummary()}
-function renderCancelChips(){
-  $("cnChips").innerHTML=cancelled.map((n,i)=>`<span class="chip">${n}<x data-i="${i}">×</x></span>`).join("");
-  document.querySelectorAll("#cnChips x").forEach(x=>x.onclick=()=>{cancelled.splice(+x.dataset.i,1);syncCancel()});
-}
-function syncCancel(){renderCancelChips();$("m_cancel").value=cancelled.length;updateSummary()}
 
 function updateSummary(){
   const cash=(+$("m_cash").value||0),rev=(+$("m_rev").value||0),closed=(+$("m_closed").value||0),q=(+$("m_qual").value||0);
-  // Commission is always 10% of the current cash collected, even if George edits cash.
+  // Commission is always 10% of the current cash collected, even if the closer edits cash.
   if($("m_comm"))$("m_comm").value=Math.round(cash*0.10);
   $("summary").innerHTML=`<span>Qualified <b>${q}</b></span><span>Closed <b>${closed}</b></span><span>Cash <b>${fmtMoney(cash)}</b></span><span>Commission <b>${fmtMoney(Math.round(cash*0.10))}</b></span><span>Revenue <b>${fmtMoney(rev)}</b></span>`;
 }
 
 function collect(){
-  const o={date:dateKey,closer:"George"};
+  const o={date:dateKey,closer:CLOSER_DISP};
   AUTO.forEach(([id,lbl])=>o[id]=(+$(id).value||0));
   o.cancellations=(+$("m_cancel").value||0);o.noShowCount=(+$("m_noshow").value||0);o.noShowNames=[...noShows];
-  o.cancelledNames=[...cancelled];
   return o;
 }
 function lock(s){document.body.classList.toggle("locked",s)}
 
 function doSubmit(){
-  // If George typed a name but didn't press Enter / comma / click away, push
-  // it into the array now so it ends up in the submitted payload.
-  const ns=$("nsInput"),cn=$("cnInput");
-  if(ns&&ns._flush)ns._flush();
-  if(cn&&cn._flush)cn._flush();
   const data=collect();
   try{if(window.storage)window.storage.set("eod:"+dateKey,JSON.stringify(data),false)}catch(e){}
   // Push to the EOD Google Sheet so the dashboard sees it live.
@@ -334,7 +261,7 @@ function doSubmit(){
   $("submitBtn").textContent="✓ Submitted";$("submitBtn").classList.add("done");
   $("status").innerHTML=`<b>Submitted ${t}</b> · dashboard updated`;
   $("reopenBtn").style.display="inline-block";
-  $("callout").innerHTML="<b>EOD submitted.</b> George's numbers are locked for "+dateLbl+" and now live on the dashboard. Hit Re-open if you need to correct anything.";
+  $("callout").innerHTML="<b>EOD submitted.</b> "+CLOSER_DISP+"'s numbers are locked for "+dateLbl+" and now live on the dashboard. Hit Re-open if you need to correct anything.";
 }
 function reopen(){submitted=false;lock(false);$("submitBtn").textContent="Submit EOD";$("submitBtn").classList.remove("done");$("status").textContent="";$("reopenBtn").style.display="none"}
 
@@ -343,36 +270,23 @@ async function loadSaved(){
     const r=window.storage&&await window.storage.get("eod:"+dateKey);
     if(r&&r.value){const d=JSON.parse(r.value);
       AUTO.forEach(([id])=>{if(d[id]!=null)$(id).value=d[id]});
-      $("m_cancel").value=d.cancellations||0;
-      // Mutate the array in place — reassigning would break the closure inside
-      // wireChipInput (its handlers hold a reference to the ORIGINAL array).
-      noShows.length=0;noShows.push(...(d.noShowNames||[]));syncNoShow();
-      cancelled.length=0;cancelled.push(...(d.cancelledNames||[]));syncCancel();
-      // Mark the form as previously-submitted (lock it, show Re-open button) —
-      // but DON'T call doSubmit(), which would fire another fetch to
-      // /api/eod-submit and post a duplicate Discord message every time the
-      // date picker lands on this day.
-      submitted=true;lock(true);
-      const t=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-      $("submitBtn").textContent="✓ Submitted";$("submitBtn").classList.add("done");
-      $("status").innerHTML=`<b>Loaded from ${t}</b> · already submitted on this date`;
-      $("reopenBtn").style.display="inline-block";
-      $("callout").innerHTML="<b>EOD already submitted</b> for "+dateLbl+". Hit Re-open if you need to correct anything.";
-      updateSummary();
+      $("m_cancel").value=d.cancellations||0;noShows=d.noShowNames||[];syncNoShow();
+      doSubmit();
     }
   }catch(e){}
 }
 
 async function loadCalls(){
   try{
-    const r=await fetch(API_BASE+"/api/eod-extract?date="+encodeURIComponent(dateKey));
+    // Pass ?closer=<name> so the backend picks the right Fathom email to filter by.
+    const r=await fetch(API_BASE+"/api/eod-extract?closer="+encodeURIComponent(CLOSER));
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();
     if(d.error)throw new Error(d.error);
     CALLS=Array.isArray(d.calls)?d.calls:[];
   }catch(e){
     CALLS=[];
-    $("callout").innerHTML="<b>Couldn't load calls for "+dateLbl+".</b> "+(e.message||e)+" — you can still fill the EOD manually below.";
+    $("callout").innerHTML="<b>Couldn't load today's calls.</b> "+(e.message||e)+" — you can still fill the EOD manually below.";
   }
   $("callCount").textContent=CALLS.length;
   $("srcLbl").textContent="Fathom · "+CALLS.length+" calls";
@@ -380,20 +294,9 @@ async function loadCalls(){
 
 async function init(){
   await loadCalls();
-  renderCalls();renderAuto();renderChips();renderCancelChips();updateSummary();
-  // Capture pending input as a chip on Enter, comma, OR blur (clicking away).
-  // Whichever the closer reaches for, the name lands in the array.
-  function wireChipInput(inputId, arr, sync){
-    const el=$(inputId);
-    const flush=()=>{const v=(el.value||"").trim();if(!v)return false;arr.push(v);el.value="";sync();return true};
-    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===","){e.preventDefault();flush()}});
-    el.addEventListener("blur",flush);
-    el._flush=flush; // expose so doSubmit can flush trailing text before collecting
-  }
-  wireChipInput("nsInput",noShows,syncNoShow);
-  wireChipInput("cnInput",cancelled,syncCancel);
+  renderCalls();renderAuto();renderChips();updateSummary();
+  $("nsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){noShows.push(e.target.value.trim());e.target.value="";syncNoShow()}});
   $("m_noshow").addEventListener("input",updateSummary);
-  $("m_cancel").addEventListener("input",updateSummary);
   $("submitBtn").onclick=()=>{if(!submitted)doSubmit()};
   $("reopenBtn").onclick=reopen;
   loadSaved();
