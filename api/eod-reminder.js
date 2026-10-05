@@ -72,8 +72,14 @@ export default async function handler(req, res) {
 
     const { hour, date: today } = ukNow();
 
-    // Only act at 21:00 London time, unless forced for testing.
-    if (process.env.REMINDER_FORCE !== "1" && hour !== 21) {
+    // Manual single-closer ping: hit /api/eod-reminder?closer=abhishek&force=1
+    // to send a reminder to one person right now, bypassing the 21:00 gate and
+    // the "already submitted" check. Useful for one-off nudges outside the cron.
+    const manualCloser = String(req.query.closer || "").trim();
+    const manualForce = req.query.force === "1";
+
+    // Only act at 21:00 London time, unless forced for testing or by the manual param.
+    if (!manualForce && process.env.REMINDER_FORCE !== "1" && hour !== 21) {
       return send(res, 200, { ok: true, reminded: false, reason: `Not 21:00 UK (currently ${hour}:00)` });
     }
 
@@ -97,11 +103,13 @@ export default async function handler(req, res) {
       return matchesDate && closerCell.includes(name.toLowerCase());
     });
 
-    const closers = (process.env.EOD_CLOSERS || "George")
+    const configured = (process.env.EOD_CLOSERS || "George")
       .split(",").map(s => s.trim()).filter(Boolean);
+    // If ?closer=<name> is set, ping only that one and skip the "already submitted" check.
+    const closers = manualCloser ? [manualCloser] : configured;
     const results = [];
     for (const name of closers) {
-      if (submittedCloser(name)) { results.push({ closer: name, reminded: false, reason: "already submitted" }); continue; }
+      if (!manualCloser && submittedCloser(name)) { results.push({ closer: name, reminded: false, reason: "already submitted" }); continue; }
       const idEnv = "DISCORD_" + name.toUpperCase() + "_ID";
       const ping = process.env[idEnv] ? `<@${process.env[idEnv]}>` : `@${name}`;
       // Per-closer form URL override, else base URL + ?closer=<name>
