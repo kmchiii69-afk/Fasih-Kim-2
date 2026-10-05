@@ -72,10 +72,12 @@ export default async function handler(req, res) {
 
     const { hour, date: today } = ukNow();
 
-    // Manual single-closer ping: hit /api/eod-reminder?closer=abhishek&force=1
-    // to send a reminder to one person right now, bypassing the 21:00 gate and
-    // the "already submitted" check. Useful for one-off nudges outside the cron.
-    const manualCloser = String(req.query.closer || "").trim();
+    // Manual ping URL patterns (all bypass the 21:00 gate when force=1):
+    //   ?force=1                       → ping every closer in EOD_CLOSERS right now
+    //   ?closer=George&force=1         → ping just George, skip the "already submitted" check
+    //   ?closer=George,Abhishek&force=1 → ping both, skip the "already submitted" check
+    const manualClosers = String(req.query.closer || "")
+      .split(",").map(s => s.trim()).filter(Boolean);
     const manualForce = req.query.force === "1";
 
     // Only act at 21:00 London time, unless forced for testing or by the manual param.
@@ -89,27 +91,16 @@ export default async function handler(req, res) {
     if (!sheetId) return send(res, 500, { error: "EOD_SHEET_ID not set" });
     if (!webhook) return send(res, 500, { error: "DISCORD_WEBHOOK_URL not set" });
 
-    // Read today's rows once, then check each configured closer.
-    const sheets = google.sheets({ version: "v4", auth: getAuth() });
-    const resp = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `'${tab.replace(/'/g, "''")}'!A:B`,
-    });
-    const rows = resp.data.values || [];
-    const submittedCloser = (name) => rows.some((r) => {
-      const dateCell = String(r[0] || "").trim();
-      const closerCell = String(r[1] || "").trim().toLowerCase();
-      const matchesDate = dateCell === today || ddmmyyyy(dateCell) === today;
-      return matchesDate && closerCell.includes(name.toLowerCase());
-    });
-
     const configured = (process.env.EOD_CLOSERS || "George")
       .split(",").map(s => s.trim()).filter(Boolean);
-    // If ?closer=<name> is set, ping only that one and skip the "already submitted" check.
-    const closers = manualCloser ? [manualCloser] : configured;
+    // Who to ping on this run.
+    const useManualList = manualClosers.length > 0;
+    const closers = useManualList ? manualClosers : configured;
+    // Always ping every configured closer — the earlier "skip if already
+    // submitted" gate was dropping George when it shouldn't. Simpler + robust:
+    // 21:00 UK fires reminders for everyone, every day.
     const results = [];
     for (const name of closers) {
-      if (!manualCloser && submittedCloser(name)) { results.push({ closer: name, reminded: false, reason: "already submitted" }); continue; }
       const idEnv = "DISCORD_" + name.toUpperCase() + "_ID";
       const ping = process.env[idEnv] ? `<@${process.env[idEnv]}>` : `@${name}`;
       // Per-closer form URL override, else base URL + ?closer=<name>
