@@ -1,5 +1,5 @@
 // /api/eod-submit.js  — Vercel serverless (Node runtime)
-// Receives George's submitted EOD (POST JSON) and appends a row to the EOD
+// Receives a closer's submitted EOD (POST JSON) and appends a row to the EOD
 // Google Sheet so the dashboard reads it live. Uses the SAME service account
 // you already set up for /api/sheets — just share the new EOD sheet with the
 // same client_email.
@@ -56,7 +56,6 @@ export default async function handler(req, res) {
       num(body.m_resched), num(body.m_cash), num(body.m_rev), num(body.m_comm),
       num(body.cancellations), num(body.noShowCount),
       (body.noShowNames || []).join("; "),
-      (body.cancelledNames || []).join("; "),
       new Date().toISOString(),
     ];
 
@@ -81,7 +80,6 @@ export default async function handler(req, res) {
         `Calls Rescheduled: ${num(body.m_resched)}`,
         `Calls DQ: ${num(body.m_disq)}`,
         `Cancellations: ${num(body.cancellations)}`,
-        `Leads That Cancelled: ${(body.cancelledNames || []).filter(Boolean).join(", ") || "0"}`,
         `Offers Pitched: ${num(body.m_offers)}`,
         `No Shows: ${num(body.noShowCount)}`,
         `Leads That No Showed: ${(body.noShowNames || []).filter(Boolean).join(", ") || "0"}`,

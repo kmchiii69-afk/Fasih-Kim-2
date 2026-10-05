@@ -3,15 +3,22 @@
 // The cron fires at both 20:00 and 21:00 UTC; this function only acts when it's
 // actually 21:00 in London (covers BST in summer and GMT in winter automatically).
 //
-// What it does: checks the EOD sheet for today's George row. If it's missing,
-// posts a Discord reminder pinging George. If it's there, does nothing.
+// What it does: checks the EOD sheet for each configured closer's today row.
+// For any closer whose row is missing, posts a Discord reminder pinging them.
+//
+// Who to remind is set via EOD_CLOSERS (comma-separated: "George,Abhishek").
+// For each name, the function reads DISCORD_<NAME>_ID for the ping ID and
+// optionally EOD_FORM_URL_<NAME> for a per-closer bookmarked form URL.
 //
 // ENV VARS:
 //   GOOGLE_SERVICE_ACCOUNT_KEY → same service account as the dashboard
 //   EOD_SHEET_ID, EOD_TAB      → the EOD sheet (EOD_TAB defaults to "EOD")
-//   DISCORD_WEBHOOK_URL        → channel webhook to post the reminder to
+//   DISCORD_WEBHOOK_URL        → channel webhook to post reminders to
+//   EOD_CLOSERS                → "George,Abhishek" (defaults to "George" for backward compat)
 //   DISCORD_GEORGE_ID          → George's Discord user ID (for the <@id> ping)
-//   EOD_FORM_URL               → public URL of closer-eod.html ("Open EOD" link)
+//   DISCORD_ABHISHEK_ID        → Abhishek's Discord user ID (for the <@id> ping)
+//   EOD_FORM_URL               → public URL of closer-eod.html; appended with ?closer=<name>
+//   EOD_FORM_URL_<NAME>        → optional override per closer (full URL)
 //   CRON_SECRET                → set by Vercel; we verify the caller when present
 //   REMINDER_FORCE             → (optional) set to "1" to bypass the 21:00 gate when testing
 
@@ -76,43 +83,52 @@ export default async function handler(req, res) {
     if (!sheetId) return send(res, 500, { error: "EOD_SHEET_ID not set" });
     if (!webhook) return send(res, 500, { error: "DISCORD_WEBHOOK_URL not set" });
 
-    // Has George already submitted today? Read date (A) + closer (B).
+    // Read today's rows once, then check each configured closer.
     const sheets = google.sheets({ version: "v4", auth: getAuth() });
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: `'${tab.replace(/'/g, "''")}'!A:B`,
     });
     const rows = resp.data.values || [];
-    const alreadyDone = rows.some((r) => {
+    const submittedCloser = (name) => rows.some((r) => {
       const dateCell = String(r[0] || "").trim();
       const closerCell = String(r[1] || "").trim().toLowerCase();
       const matchesDate = dateCell === today || ddmmyyyy(dateCell) === today;
-      return matchesDate && closerCell.includes("george");
+      return matchesDate && closerCell.includes(name.toLowerCase());
     });
 
-    if (alreadyDone) {
-      return send(res, 200, { ok: true, reminded: false, reason: "EOD already submitted today" });
+    const closers = (process.env.EOD_CLOSERS || "George")
+      .split(",").map(s => s.trim()).filter(Boolean);
+    const results = [];
+    for (const name of closers) {
+      if (submittedCloser(name)) { results.push({ closer: name, reminded: false, reason: "already submitted" }); continue; }
+      const idEnv = "DISCORD_" + name.toUpperCase() + "_ID";
+      const ping = process.env[idEnv] ? `<@${process.env[idEnv]}>` : `@${name}`;
+      // Per-closer form URL override, else base URL + ?closer=<name>
+      const perCloser = process.env["EOD_FORM_URL_" + name.toUpperCase()];
+      const baseUrl = process.env.EOD_FORM_URL || "";
+      const formUrl = perCloser || (baseUrl ? baseUrl + (baseUrl.includes("?") ? "&" : "?") + "closer=" + encodeURIComponent(name) : "");
+      const content = `${ping} — your End of Day report isn't in yet. Please complete it before you log off.`;
+      const embed = {
+        title: `End of Day Report — pending (${name})`,
+        description: formUrl
+          ? `Your calls are already auto-filled. Just verify and submit.\n\n**[Open your EOD →](${formUrl})**`
+          : "Your calls are already auto-filled. Just verify and submit.",
+        color: 0xc8a24b,
+      };
+      try {
+        const dr = await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, embeds: [embed], allowed_mentions: { parse: ["users"] } }),
+        });
+        if (!dr.ok) { results.push({ closer: name, reminded: false, error: "Discord " + dr.status }); continue; }
+        results.push({ closer: name, reminded: true });
+      } catch (e) {
+        results.push({ closer: name, reminded: false, error: String(e && e.message || e) });
+      }
     }
-
-    const ping = process.env.DISCORD_GEORGE_ID ? `<@${process.env.DISCORD_GEORGE_ID}>` : "@George";
-    const formUrl = process.env.EOD_FORM_URL || "";
-    const content = `${ping} — your End of Day report isn't in yet. Please complete it before you log off.`;
-    const embed = {
-      title: "End of Day Report — pending",
-      description: formUrl
-        ? `Your calls are already auto-filled. Just verify and submit.\n\n**[Open your EOD →](${formUrl})**`
-        : "Your calls are already auto-filled. Just verify and submit.",
-      color: 0xc8a24b,
-    };
-
-    const dr = await fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, embeds: [embed], allowed_mentions: { parse: ["users"] } }),
-    });
-    if (!dr.ok) return send(res, 500, { error: "Discord " + dr.status + ": " + (await dr.text()).slice(0, 200) });
-
-    return send(res, 200, { ok: true, reminded: true });
+    return send(res, 200, { ok: true, results });
   } catch (err) {
     return send(res, 500, { error: (err && err.message) || String(err) });
   }

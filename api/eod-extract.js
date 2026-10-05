@@ -1,15 +1,18 @@
 // /api/eod-extract.js  — Vercel serverless (Node runtime)
-// Pulls George's Fathom meetings for "today" (UK), runs each transcript through
-// the Claude API to score ICP + classify outcome, and returns the CALLS array
-// in the exact shape closer-eod.html already consumes.
+// Pulls the named closer's Fathom meetings for "today" (UK), runs each transcript
+// through the Claude API to score ICP + classify outcome, and returns the CALLS
+// array in the exact shape closer-eod.html already consumes.
 //
-// Frontend: GET /api/eod-extract?closer=george   (closer optional; defaults to George)
+// Frontend: GET /api/eod-extract?closer=george        (defaults to George)
+//           GET /api/eod-extract?closer=abhishek
 //
 // ENV VARS (Vercel → Settings → Environment Variables):
-//   FATHOM_API_KEY        → your Fathom API key (Settings > API in Fathom)
-//   ANTHROPIC_API_KEY     → your Anthropic API key
-//   CLOSER_GEORGE_EMAIL   → the email George records Fathom calls under (recorded_by filter)
-//   DASHBOARD_TOKEN       → (optional) shared secret; if set, request must pass ?token=
+//   FATHOM_API_KEY           → your Fathom API key (Settings > API in Fathom)
+//   ANTHROPIC_API_KEY        → your Anthropic API key
+//   CLOSER_GEORGE_EMAIL      → the email George records Fathom calls under
+//   CLOSER_ABHISHEK_EMAIL    → the email Abhishek records Fathom calls under
+//   (any closer: CLOSER_<UPPERCASE_NAME>_EMAIL)
+//   DASHBOARD_TOKEN          → (optional) shared secret; if set, request must pass ?token=
 
 const FATHOM_BASE = "https://api.fathom.ai/external/v1";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -20,23 +23,15 @@ function send(res, status, obj) {
   res.status(status).send(JSON.stringify(obj));
 }
 
-// Start/end of a UK day, returned as UTC ISO strings for Fathom filters.
-// dateStr is an optional YYYY-MM-DD — defaults to today (as seen in London).
-function ukDayWindow(dateStr) {
+// Start/end of "today" in UK time, returned as UTC ISO strings for Fathom filters.
+function ukDayWindow() {
   const now = new Date();
-  let y, m, d;
-  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    // Explicit date requested (e.g. yesterday when the closer backdates the EOD).
-    const [yy, mm, dd] = dateStr.split("-").map(Number);
-    y = yy; m = mm - 1; d = dd;
-  } else {
-    const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
-    y = ukNow.getFullYear(); m = ukNow.getMonth(); d = ukNow.getDate();
-  }
+  // Get today's date as seen in London
+  const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
+  const y = ukNow.getFullYear(), m = ukNow.getMonth(), d = ukNow.getDate();
   // Build local-London midnight and next midnight, then convert to UTC by
   // measuring London's offset right now.
-  const ukNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/London" }));
-  const offsetMs = now.getTime() - ukNow.getTime();
+  const offsetMs = now.getTime() - ukNow.getTime(); // UTC - London display
   const startLocal = new Date(y, m, d, 0, 0, 0, 0).getTime();
   const endLocal = new Date(y, m, d + 1, 0, 0, 0, 0).getTime();
   return {
@@ -65,15 +60,6 @@ async function fathomMeetings(apiKey, email, after, before) {
   return all;
 }
 
-// Approximate FX rates for converting non-USD amounts mentioned in transcripts
-// into USD. Anchored to mid-market rates; bump these here when they drift more
-// than a few percent. The values flow into the RUBRIC string below.
-const CURRENCY_RATES = {
-  GBP: 1.34,   // £ → $
-  EUR: 1.15,   // € → $
-  CAD: 0.73,   // C$ → $
-  AUD: 0.65,   // A$ → $
-};
 const RUBRIC = `You are scoring a sales call for Goh Consulting, a business coaching company.
 Score the LEAD (the prospect, not the closer) on five ICP factors. Max points per factor:
 - Budget: 30  (can they afford the program? revenue/cash on hand)
@@ -84,16 +70,8 @@ Score the LEAD (the prospect, not the closer) on five ICP factors. Max points pe
 
 Then classify call OUTCOME. Valid outcome tags (zero or more): "Offer Pitched", "Closed", "Rescheduled".
 Identify the OFFER if one was pitched: one of "Brand Architect", "Acquisition Mastery", "Advisory Group", or null.
-
-CURRENCY — IMPORTANT. The "cash" and "revenue" fields MUST be returned in USD.
-- If the transcript explicitly mentions amounts in another currency (£, GBP, pounds, €, EUR, euros, C$/CAD, A$/AUD), CONVERT to USD using these rates:
-    GBP → USD × ${CURRENCY_RATES.GBP}
-    EUR → USD × ${CURRENCY_RATES.EUR}
-    CAD → USD × ${CURRENCY_RATES.CAD}
-    AUD → USD × ${CURRENCY_RATES.AUD}
-  Round to the nearest whole dollar. Example: "£5,600" → 5600 × ${CURRENCY_RATES.GBP} = ${Math.round(5600 * CURRENCY_RATES.GBP)}.
-- If the currency is not explicitly mentioned in the transcript, assume USD (do NOT convert).
-- "Cash" is the deposit paid today; "revenue" is the full contract value (which can be higher than cash on a payment plan).
+Deal values: Brand Architect = $14k PIF / $15k plan; Acquisition Mastery = $30k; Advisory Group = $45k.
+On a payment plan, cash collected (deposit) is LESS than revenue (contract value).
 
 Return ONLY valid JSON, no markdown, no preamble, with this exact shape:
 {
@@ -146,22 +124,10 @@ function hasExternalInvitee(m) {
   return (m.calendar_invitees || []).some((i) => i.is_external);
 }
 
-// One-off exclusion: drop any call where Lazar is on the invite list, regardless
-// of whether the title or external-invitee checks would otherwise pass.
-const INVITEE_EMAIL_BLOCKLIST = ["lazzartopalovic@gmail.com"];
-function hasBlockedInvitee(m) {
-  const invitees = m.calendar_invitees || [];
-  return invitees.some((i) => {
-    const email = String(i.email || "").trim().toLowerCase();
-    return INVITEE_EMAIL_BLOCKLIST.includes(email);
-  });
-}
-
 // A call counts as a real sales call only if its title isn't on the blocklist
-// AND it has at least one external (prospect) invitee AND no invitee email
-// is on the exclusion list.
+// AND it has at least one external (prospect) invitee.
 function isSalesCall(m) {
-  return !isInternalTitle(m) && !hasBlockedInvitee(m) && hasExternalInvitee(m);
+  return !isInternalTitle(m) && hasExternalInvitee(m);
 }
 
 async function scoreCall(anthropicKey, m) {
@@ -203,12 +169,19 @@ export default async function handler(req, res) {
 
     const fathomKey = process.env.FATHOM_API_KEY;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    const email = process.env.CLOSER_GEORGE_EMAIL;
+    // Resolve closer from query ?closer=<name> (default George). The matching
+    // env var is CLOSER_<UPPERCASE_NAME>_EMAIL. Add new closers just by
+    // defining a new env var — no code change needed.
+    const closerRaw = String(req.query.closer || "george").trim();
+    const closerKey = closerRaw.toUpperCase();
+    const closerDisplay = closerRaw.charAt(0).toUpperCase() + closerRaw.slice(1).toLowerCase();
+    const emailVar = "CLOSER_" + closerKey + "_EMAIL";
+    const email = process.env[emailVar];
     if (!fathomKey) return send(res, 500, { error: "FATHOM_API_KEY not set" });
     if (!anthropicKey) return send(res, 500, { error: "ANTHROPIC_API_KEY not set" });
-    if (!email) return send(res, 500, { error: "CLOSER_GEORGE_EMAIL not set" });
+    if (!email) return send(res, 500, { error: emailVar + " not set" });
 
-    const { after, before } = ukDayWindow(req.query.date);
+    const { after, before } = ukDayWindow();
     const meetings = await fathomMeetings(fathomKey, email, after, before);
 
     // Keep only real sales calls: drop internal-titled meetings (Sales Huddle,
@@ -220,7 +193,7 @@ export default async function handler(req, res) {
     for (const m of salesCalls) calls.push(await scoreCall(anthropicKey, m));
 
     return send(res, 200, {
-      closer: "George",
+      closer: closerDisplay,
       date: after.slice(0, 10),
       count: calls.length,
       skipped: meetings.length - salesCalls.length,
