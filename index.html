@@ -205,18 +205,19 @@ body.editing .edit-only{display:inline-flex}
 .funnel-sec{margin-top:12px}
 .funnel-sec .funnel-title{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:22px 0 10px}
 .funnel-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.funnel-input-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+.funnel-input-card{background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;padding:18px 20px}
 .funnel-input-card .fin-label{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:10px}
 .funnel-input-card .fin-value{font-size:30px;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1}
 .funnel-input-card .fin-prev{font-size:11.5px;color:var(--muted2);margin-top:8px}
 .funnel-input-card .fin-prev .delta-up{color:#4ade80}
 .funnel-input-card .fin-prev .delta-dn{color:#f87171}
-.funnel-input-card .fin-sec{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.funnel-input-card .fin-sec{border-top:1px solid var(--line-str);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .funnel-input-card .fin-sec-label{color:var(--muted);font-size:12px;font-weight:500}
 .funnel-input-card .fin-sec-value{color:var(--gold);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
-.funnel-table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow-x:auto}
-.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
-.funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:var(--panel-alt)}
+.funnel-table-wrap{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow-x:auto}
+.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:360px}
+.funnel-table tr[data-stage-key].drag-over{outline:2px solid var(--gold);outline-offset:-2px}
+.funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line-str);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:#0e0b08}
 .funnel-table th.num,.funnel-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 .funnel-table td{padding:12px 14px;border-bottom:1px solid #221c14}
 .funnel-table tbody tr:last-child td{border-bottom:none}
@@ -231,9 +232,9 @@ body.editing .edit-only{display:inline-flex}
 .funnel-empty .btn{margin-top:14px}
 /* Funnel config modal rows */
 .fnl-cfg-rows{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-right:4px}
-.fnl-cfg-row{display:grid;grid-template-columns:30px minmax(140px,1fr) minmax(140px,1fr) minmax(200px,2fr) 30px;gap:8px;align-items:center;padding:8px;background:#0f0d09;border:1px solid var(--border);border-radius:6px}
+.fnl-cfg-row{display:grid;grid-template-columns:30px minmax(140px,1fr) minmax(140px,1fr) minmax(200px,2fr) 30px;gap:8px;align-items:center;padding:8px;background:#0f0d09;border:1px solid var(--line-str);border-radius:6px}
 .fnl-cfg-row .stage-idx{color:var(--gold);font-weight:700;font-size:13px;text-align:center}
-.fnl-cfg-row input,.fnl-cfg-row select{background:var(--panel-alt);color:var(--txt);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+.fnl-cfg-row input,.fnl-cfg-row select{background:rgba(255,255,255,.03);color:var(--txt);border:1px solid var(--line-str);border-radius:5px;padding:6px 8px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
 .fnl-cfg-row .rm{background:transparent;color:#f87171;border:none;cursor:pointer;font-size:14px}
 .fnl-cfg-sec-title{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:16px 0 8px}
 .wb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
@@ -1403,31 +1404,53 @@ function renderFunnelView(tab){
     <thead><tr>
       <th>#</th><th>Metric</th>
       <th class="num">This period</th>
-      <th class="num">Conv. % from prev</th>
-      <th class="num">Last period</th>
-      <th class="num">Change</th>
     </tr></thead><tbody>`;
-  let prevRaw=null;
   stageCards.forEach((c,i)=>{
-    let convTxt="—";
-    if(prevRaw!==null&&c.fmt!=="percent"){
-      convTxt=prevRaw>0?((c.cur/prevRaw)*100).toFixed(1)+"%":"—";
-    }
-    const delta=c.cur-c.prev;
-    const deltaCls=delta>0?"delta-up":(delta<0?"delta-dn":"");
-    const deltaSign=delta>0?"▲":(delta<0?"▼":"·");
-    html+=`<tr>
-      <td class="stage-num">${i+1}</td>
+    // Each row carries its card KEY so drag-reorder can rewrite CFG.order[tab].
+    html+=`<tr data-stage-key="${esc(c.key)}" draggable="true" style="cursor:grab">
+      <td class="stage-num" title="Drag to reorder">${i+1}</td>
       <td class="stage-name">${esc(c.label)}${c.sub?`<div style="font-size:10.5px;color:var(--muted2);font-weight:400;margin-top:2px">${esc(c.sub)}</div>`:""}</td>
       <td class="num">${fmtVal(c.cur,c.fmt)}</td>
-      <td class="num conv ${convTxt==="—"?'dim':''}">${convTxt}</td>
-      <td class="num">${fmtVal(c.prev,c.fmt)}</td>
-      <td class="num"><span class="${deltaCls}">${deltaSign} ${fmtVal(Math.abs(delta),c.fmt)}</span></td>
     </tr>`;
-    if(c.fmt!=="percent")prevRaw=c.cur;
   });
   html+=`</tbody></table></div>`;
   host.innerHTML=html;
+  wireFunnelStageDragDrop(tab,host);
+}
+
+// Drag-reorder for funnel stage rows. Rewrites CFG.order[tab] so the new order
+// also applies to Widgets view (single source of truth).
+function wireFunnelStageDragDrop(tab,host){
+  const rows=host.querySelectorAll("tr[data-stage-key]");
+  rows.forEach(row=>{
+    row.ondragstart=e=>{
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain",row.dataset.stageKey);
+      row.style.opacity=".4";
+    };
+    row.ondragend=()=>{
+      row.style.opacity="";
+      host.querySelectorAll("tr[data-stage-key]").forEach(r=>r.style.outline="");
+    };
+    row.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect="move";row.style.outline="2px solid var(--gold)";row.style.outlineOffset="-2px"};
+    row.ondragleave=()=>{row.style.outline=""};
+    row.ondrop=e=>{
+      e.preventDefault();row.style.outline="";
+      const srcKey=e.dataTransfer.getData("text/plain");
+      const dstKey=row.dataset.stageKey;
+      if(!srcKey||srcKey===dstKey)return;
+      const order=(CFG.order[tab]||[]).slice();
+      const i=order.indexOf(srcKey);
+      if(i<0)return;
+      order.splice(i,1);
+      const insertAt=order.indexOf(dstKey);
+      if(insertAt<0)return;
+      order.splice(insertAt,0,srcKey);
+      CFG.order[tab]=order;
+      saveSharedCfg();
+      renderTab(tab);
+    };
+  });
 }
 
 /* Funnel configuration modal — pick which existing cards appear as "input boxes"
