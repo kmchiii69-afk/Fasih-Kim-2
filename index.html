@@ -214,8 +214,11 @@ body.editing .edit-only{display:inline-flex}
 .funnel-input-card .fin-sec{border-top:1px solid var(--line-str);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .funnel-input-card .fin-sec-label{color:var(--muted);font-size:12px;font-weight:500}
 .funnel-input-card .fin-sec-value{color:var(--gold);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
-.funnel-table-wrap{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow-x:auto}
-.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:360px}
+.funnel-table-wrap{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow-x:auto;max-width:560px}
+.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:360px;table-layout:fixed}
+.funnel-table col.col-num{width:48px}
+.funnel-table col.col-metric{width:auto}
+.funnel-table col.col-value{width:140px}
 .funnel-table tr[data-stage-key].drag-over{outline:2px solid var(--gold);outline-offset:-2px}
 .funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line-str);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:#0e0b08}
 .funnel-table th.num,.funnel-table td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -1401,6 +1404,7 @@ function renderFunnelView(tab){
   }
 
   html+=`<div class="funnel-table-wrap" style="margin-top:${inputSlots.length?'20px':'4px'}"><table class="funnel-table">
+    <colgroup><col class="col-num"><col class="col-metric"><col class="col-value"></colgroup>
     <thead><tr>
       <th>#</th><th>Metric</th>
       <th class="num">This period</th>
