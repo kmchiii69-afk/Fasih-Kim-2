@@ -177,8 +177,10 @@
 /* Controls only render in edit mode, and only on hover */
 body.editing .widget:hover .wctrl{display:flex}
 /* Subtle dashed outline on editable widgets in edit mode */
-body.editing .widget{outline:1px dashed transparent;outline-offset:4px;transition:outline-color .15s}
+body.editing .widget{outline:1px dashed transparent;outline-offset:4px;transition:outline-color .15s,opacity .12s,transform .12s;cursor:grab}
 body.editing .widget:hover{outline-color:rgba(216,169,79,.35)}
+body.editing .widget.dragging{opacity:.5;cursor:grabbing}
+body.editing .widget.drag-over{outline-color:var(--gold);outline-style:solid}
 /* Mode button — flips appearance when active */
 #modeBtn.on{background:var(--grad-gold);color:#241803;border:none;font-weight:700}
 .edit-only{display:none}
@@ -202,13 +204,16 @@ body.editing .edit-only{display:inline-flex}
 .view-toggle .vt-btn.active{background:rgba(216,169,79,.18);color:var(--gold)}
 .funnel-sec{margin-top:12px}
 .funnel-sec .funnel-title{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:22px 0 10px}
-.funnel-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.funnel-input-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
-.funnel-input-card .fin-label{font-size:11.5px;color:var(--muted);font-weight:500;margin-bottom:8px}
-.funnel-input-card .fin-value{font-size:26px;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
-.funnel-input-card .fin-prev{font-size:11px;color:var(--muted2);margin-top:6px}
+.funnel-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.funnel-input-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+.funnel-input-card .fin-label{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:10px}
+.funnel-input-card .fin-value{font-size:30px;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1}
+.funnel-input-card .fin-prev{font-size:11.5px;color:var(--muted2);margin-top:8px}
 .funnel-input-card .fin-prev .delta-up{color:#4ade80}
 .funnel-input-card .fin-prev .delta-dn{color:#f87171}
+.funnel-input-card .fin-sec{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.funnel-input-card .fin-sec-label{color:var(--muted);font-size:12px;font-weight:500}
+.funnel-input-card .fin-sec-value{color:var(--gold);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
 .funnel-table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow-x:auto}
 .funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
 .funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:var(--panel-alt)}
@@ -1190,6 +1195,52 @@ function renderTab(tab){
   if(!html)html=`<div class="empty-tab">No widgets here yet. Click <b>+ Add Widget</b> above to build one.</div>`;
   host.innerHTML=html;
   pieces.forEach(p=>{if(p.after)p.after()});
+  wireWidgetDragDrop(tab,host);
+}
+
+// HTML5 drag-and-drop reorder for widgets in a tab. Only active when edit mode
+// is on (body.editing). Dragging a widget over another one and dropping it
+// moves the dragged key before/after the drop target in CFG.order[tab], then
+// re-renders the tab. Keeps up/down arrow buttons too so nothing regresses.
+function wireWidgetDragDrop(tab,host){
+  if(!host)return;
+  const widgets=host.querySelectorAll(".widget[data-key]");
+  widgets.forEach(el=>{
+    el.setAttribute("draggable","true");
+    el.ondragstart=e=>{
+      if(!document.body.classList.contains("editing")){e.preventDefault();return}
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain",el.dataset.key);
+      el.classList.add("dragging");
+    };
+    el.ondragend=()=>{
+      el.classList.remove("dragging");
+      host.querySelectorAll(".widget.drag-over").forEach(x=>x.classList.remove("drag-over"));
+    };
+    el.ondragover=e=>{
+      if(!document.body.classList.contains("editing"))return;
+      e.preventDefault();e.dataTransfer.dropEffect="move";
+      el.classList.add("drag-over");
+    };
+    el.ondragleave=()=>el.classList.remove("drag-over");
+    el.ondrop=e=>{
+      e.preventDefault();
+      el.classList.remove("drag-over");
+      const srcKey=e.dataTransfer.getData("text/plain");
+      const dstKey=el.dataset.key;
+      if(!srcKey||srcKey===dstKey)return;
+      const order=(CFG.order[tab]||[]).slice();
+      const i=order.indexOf(srcKey),j=order.indexOf(dstKey);
+      if(i<0||j<0)return;
+      order.splice(i,1);
+      // Insert BEFORE the drop target (feels natural: dragging left of it = place before)
+      const insertAt=order.indexOf(dstKey);
+      order.splice(insertAt,0,srcKey);
+      CFG.order[tab]=order;
+      saveSharedCfg();
+      renderTab(tab);
+    };
+  });
 }
 
 /* ═══════════════ FUNNEL VIEW ═══════════════
@@ -1304,14 +1355,19 @@ function renderFunnelView(tab){
   // don't appear twice). Cards used only as secondary still appear as a stage.
   const cfg=(CFG.funnelConfig||{})[tab]||{inputs:[]};
   const inputSlots=Array.isArray(cfg.inputs)?cfg.inputs:[];
+  // Comparison toggle — default OFF. Flip it on in Configure Funnel if you want
+  // the "vs last period" lines shown on input boxes.
+  const showCmp=cfg.showComparison===true;
   const inputPrimaryKeys=new Set();
   inputSlots.forEach(s=>{if(s&&s.primary)inputPrimaryKeys.add(s.primary)});
   const stageCards=cards.filter(c=>!inputPrimaryKeys.has(c.key));
 
-  let html=`<div class="funnel-title">Funnel · ${esc(tabDisplayName(tab))}</div>`;
+  // Section headers removed per user request — the nav already shows the tab name,
+  // and the structure (input boxes on top, table below) is self-explanatory.
+  let html="";
 
   if(inputSlots.length){
-    html+=`<div class="funnel-title" style="margin-top:4px">Inputs (activity, not funnel)</div><div class="funnel-inputs">`;
+    html+=`<div class="funnel-inputs" style="margin-top:4px">`;
     inputSlots.forEach(slot=>{
       const prim=slot&&slot.primary?byKey[slot.primary]:null;
       const sec=slot&&slot.secondary?byKey[slot.secondary]:null;
@@ -1324,25 +1380,26 @@ function renderFunnelView(tab){
         const sDelta=sec.cur-sec.prev;
         const sCls=sDelta>0?"delta-up":(sDelta<0?"delta-dn":"");
         const sSign=sDelta>0?"▲":(sDelta<0?"▼":"·");
-        secHtml=`<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <span style="color:var(--muted);font-size:11.5px;font-weight:500">${esc(sec.label)}</span>
-            <span style="color:var(--gold);font-weight:700;font-size:14px;font-variant-numeric:tabular-nums">${fmtVal(sec.cur,sec.fmt)}</span>
-          </div>
-          <div class="fin-prev" style="margin-top:4px">vs last period <span class="${sCls}">${sSign} ${fmtVal(Math.abs(sDelta),sec.fmt)}</span></div>
-        </div>`;
+        // Label on the left + big gold value on the right. Delta line only
+        // appears when the comparison toggle is on.
+        const secCmp=showCmp?`<div class="fin-prev">vs last period <span class="${sCls}">${sSign} ${fmtVal(Math.abs(sDelta),sec.fmt)}</span></div>`:"";
+        secHtml=`<div class="fin-sec">
+            <span class="fin-sec-label">${esc(sec.label)}</span>
+            <span class="fin-sec-value">${fmtVal(sec.cur,sec.fmt)}</span>
+          </div>${secCmp}`;
       }
+      const primCmp=showCmp?`<div class="fin-prev">vs last period <span class="${pCls}">${pSign} ${fmtVal(Math.abs(pDelta),prim.fmt)}</span></div>`:"";
       html+=`<div class="funnel-input-card">
         <div class="fin-label">${esc(prim.label)}</div>
         <div class="fin-value">${fmtVal(prim.cur,prim.fmt)}</div>
-        <div class="fin-prev">vs last period <span class="${pCls}">${pSign} ${fmtVal(Math.abs(pDelta),prim.fmt)}</span></div>
+        ${primCmp}
         ${secHtml}
       </div>`;
     });
     html+=`</div>`;
   }
 
-  html+=`<div class="funnel-table-wrap"><table class="funnel-table">
+  html+=`<div class="funnel-table-wrap" style="margin-top:${inputSlots.length?'20px':'4px'}"><table class="funnel-table">
     <thead><tr>
       <th>#</th><th>Metric</th>
       <th class="num">This period</th>
@@ -1395,8 +1452,8 @@ function openFunnelConfig(tab){
   if(!ov){ov=document.createElement("div");ov.id="funnelCfgOv";ov.className="overlay";document.body.appendChild(ov)}
   const cardOpts=sel=>`<option value="">— pick a scorecard —</option>`+
     cards.map(c=>`<option value="${esc(c.key)}" ${c.key===sel?'selected':''}>${esc(c.label)}</option>`).join("");
-  const rowHtml=(slot,i)=>`<div class="fnl-cfg-row" data-i="${i}" style="grid-template-columns:30px 1fr 1fr 30px">
-    <div class="stage-idx">${i+1}</div>
+  const rowHtml=(slot,i)=>`<div class="fnl-cfg-row" data-i="${i}" draggable="true" style="grid-template-columns:30px 1fr 1fr 30px;cursor:grab">
+    <div class="stage-idx" title="Drag to reorder">⋮⋮</div>
     <select class="fnl-primary" title="Main number shown large">${cardOpts(slot.primary||"")}</select>
     <select class="fnl-secondary" title="Optional second metric shown below">${cardOpts(slot.secondary||"")}</select>
     <button class="rm" title="Remove this input box">✕</button>
@@ -1406,12 +1463,31 @@ function openFunnelConfig(tab){
       primary:row.querySelector(".fnl-primary").value||"",
       secondary:row.querySelector(".fnl-secondary").value||"",
     })).filter(s=>s.primary);
+    const cmp=ov.querySelector("#fnl-show-cmp");
+    if(cmp)cfg.showComparison=cmp.checked;
   };
   const render=()=>{
     const empty=`<div style="color:var(--muted2);font-size:12px;padding:8px">No input boxes yet. Click + Add input box to create one.</div>`;
-    ov.querySelector("#fnl-inputs-list").innerHTML=cfg.inputs.length?cfg.inputs.map((s,i)=>rowHtml(s,i)).join(""):empty;
+    const list=ov.querySelector("#fnl-inputs-list");
+    list.innerHTML=cfg.inputs.length?cfg.inputs.map((s,i)=>rowHtml(s,i)).join(""):empty;
     ov.querySelectorAll(".fnl-cfg-row .rm").forEach(b=>{
       b.onclick=()=>{collect();cfg.inputs.splice(+b.closest(".fnl-cfg-row").dataset.i,1);render()};
+    });
+    // Drag-reorder rows. On drop we swap positions in cfg.inputs and re-render.
+    list.querySelectorAll(".fnl-cfg-row").forEach(row=>{
+      row.ondragstart=e=>{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",row.dataset.i);row.style.opacity=".4"};
+      row.ondragend=()=>{row.style.opacity="";list.querySelectorAll(".fnl-cfg-row").forEach(r=>r.style.outline="")};
+      row.ondragover=e=>{e.preventDefault();row.style.outline="2px solid var(--gold)"};
+      row.ondragleave=()=>row.style.outline="";
+      row.ondrop=e=>{
+        e.preventDefault();
+        collect();
+        const from=+e.dataTransfer.getData("text/plain"),to=+row.dataset.i;
+        if(isNaN(from)||isNaN(to)||from===to)return;
+        const [moved]=cfg.inputs.splice(from,1);
+        cfg.inputs.splice(to,0,moved);
+        render();
+      };
     });
   };
   ov.innerHTML=`<div class="modal" style="width:720px">
@@ -1420,6 +1496,10 @@ function openFunnelConfig(tab){
       <div style="color:var(--muted);font-size:12.5px;line-height:1.55;margin-bottom:14px">
         Pick which scorecards show as big input boxes at the top of the funnel view. Add a secondary metric to any box if you want a smaller number paired below (e.g. Outbound sent + Outbound reply rate). Everything else on the tab stays in the funnel table.
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt);cursor:pointer;margin-bottom:16px;padding:10px 12px;background:#0f0d09;border:1px solid var(--border);border-radius:8px">
+        <input type="checkbox" id="fnl-show-cmp" ${cfg.showComparison?'checked':''} style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold)">
+        Show "vs last period" comparison lines on input boxes
+      </label>
       <div class="fnl-cfg-sec-title">Input boxes</div>
       <div style="display:grid;grid-template-columns:30px 1fr 1fr 30px;gap:8px;padding:0 8px;font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
         <div></div><div>Primary (main number)</div><div>Secondary (optional)</div><div></div>
