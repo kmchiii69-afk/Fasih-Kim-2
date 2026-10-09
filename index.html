@@ -214,26 +214,15 @@ body.editing .edit-only{display:inline-flex}
 .funnel-input-card .fin-sec{border-top:1px solid var(--line-str);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .funnel-input-card .fin-sec-label{color:var(--muted);font-size:12px;font-weight:500}
 .funnel-input-card .fin-sec-value{color:var(--gold);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
-.funnel-title{font-size:10.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
-.funnel-table-wrap{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow-x:auto;max-width:460px}
-.funnel-table{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed}
-.funnel-table col.col-num{width:52px}
+.funnel-table-wrap{background:linear-gradient(170deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:14px;overflow-x:auto;max-width:560px}
+.funnel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:360px;table-layout:fixed}
+.funnel-table col.col-num{width:48px}
 .funnel-table col.col-metric{width:auto}
+.funnel-table col.col-value{width:140px}
 .funnel-table tr[data-stage-key].drag-over{outline:2px solid var(--gold);outline-offset:-2px}
-.funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:11px 16px;border-bottom:1px solid var(--line-str);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:#0e0b08}
+.funnel-table th{text-align:left;font-weight:600;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line-str);text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;background:#0e0b08}
 .funnel-table th.num,.funnel-table td.num{text-align:right;font-variant-numeric:tabular-nums}
-.funnel-table td{padding:13px 16px;border-bottom:1px solid #221c14}
-/* Stage → stage conversion list */
-.funnel-conv-list{display:flex;flex-direction:column;gap:8px;max-width:720px}
-.funnel-conv-row{display:flex;justify-content:space-between;align-items:center;gap:16px;background:linear-gradient(165deg,var(--panel-a),var(--panel-b));border:1px solid var(--line-str);border-radius:10px;padding:12px 16px;flex-wrap:wrap}
-.funnel-conv-row .conv-pair{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--txt);font-size:13px;font-weight:500;min-width:0;flex:1}
-.funnel-conv-row .conv-arrow{color:var(--muted2);font-weight:400}
-.funnel-conv-row .conv-metrics{display:flex;align-items:center;gap:14px;font-variant-numeric:tabular-nums}
-.funnel-conv-row .conv-rate{color:var(--gold);font-weight:700;font-size:15px}
-.funnel-conv-row .conv-drop{color:var(--muted);font-size:11.5px}
-.funnel-conv-row .conv-badge{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--red);border:1px solid rgba(221,114,106,.45);padding:3px 7px;border-radius:5px;font-weight:600}
-.funnel-conv-row.worst{border-color:rgba(221,114,106,.55);background:linear-gradient(165deg,rgba(221,114,106,.08),rgba(221,114,106,.02))}
-.funnel-conv-row.worst .conv-drop{color:var(--red);font-weight:600}
+.funnel-table td{padding:12px 14px;border-bottom:1px solid #221c14}
 .funnel-table tbody tr:last-child td{border-bottom:none}
 .funnel-table tbody tr:hover{background:rgba(216,169,79,.03)}
 .funnel-table .stage-num{color:var(--muted2);font-weight:600;width:30px}
@@ -1373,12 +1362,9 @@ function renderFunnelView(tab){
   // Comparison toggle — default OFF. Flip it on in Configure Funnel if you want
   // the "vs last period" lines shown on input boxes.
   const showCmp=cfg.showComparison===true;
-  // Cards used as EITHER primary or secondary in the input boxes are excluded
-  // from the stage list — reply rates etc. live in the top boxes and shouldn't
-  // appear again below.
-  const inputUsedKeys=new Set();
-  inputSlots.forEach(s=>{if(s&&s.primary)inputUsedKeys.add(s.primary);if(s&&s.secondary)inputUsedKeys.add(s.secondary)});
-  const stageCards=cards.filter(c=>!inputUsedKeys.has(c.key));
+  const inputPrimaryKeys=new Set();
+  inputSlots.forEach(s=>{if(s&&s.primary)inputPrimaryKeys.add(s.primary)});
+  const stageCards=cards.filter(c=>!inputPrimaryKeys.has(c.key));
 
   // Section headers removed per user request — the nav already shows the tab name,
   // and the structure (input boxes on top, table below) is self-explanatory.
@@ -1417,54 +1403,21 @@ function renderFunnelView(tab){
     html+=`</div>`;
   }
 
-  // ============ STAGE LIST (clean numbered list, no values) ============
-  html+=`<div class="funnel-title" style="margin-top:${inputSlots.length?'24px':'4px'};margin-bottom:10px">Funnel</div>`;
-  html+=`<div class="funnel-table-wrap"><table class="funnel-table">
-    <colgroup><col class="col-num"><col class="col-metric"></colgroup>
-    <thead><tr><th>Stage</th><th></th></tr></thead><tbody>`;
+  html+=`<div class="funnel-table-wrap" style="margin-top:${inputSlots.length?'20px':'4px'}"><table class="funnel-table">
+    <colgroup><col class="col-num"><col class="col-metric"><col class="col-value"></colgroup>
+    <thead><tr>
+      <th>#</th><th>Metric</th>
+      <th class="num">This period</th>
+    </tr></thead><tbody>`;
   stageCards.forEach((c,i)=>{
     // Each row carries its card KEY so drag-reorder can rewrite CFG.order[tab].
     html+=`<tr data-stage-key="${esc(c.key)}" draggable="true" style="cursor:grab">
       <td class="stage-num" title="Drag to reorder">${i+1}</td>
-      <td class="stage-name">${esc(c.label)}</td>
+      <td class="stage-name">${esc(c.label)}${c.sub?`<div style="font-size:10.5px;color:var(--muted2);font-weight:400;margin-top:2px">${esc(c.sub)}</div>`:""}</td>
+      <td class="num">${fmtVal(c.cur,c.fmt)}</td>
     </tr>`;
   });
   html+=`</tbody></table></div>`;
-
-  // ============ CONVERSIONS (drop-off between consecutive stages) ============
-  // Only meaningful when there are at least 2 count-like stages. Skip percent
-  // cards so we don't try to compute "pct of pct". Biggest drop gets highlighted.
-  const numericStages=stageCards.filter(c=>c.fmt!=="percent");
-  if(numericStages.length>=2){
-    const transitions=[];
-    for(let i=1;i<numericStages.length;i++){
-      const from=numericStages[i-1],to=numericStages[i];
-      const conv=from.cur>0?(to.cur/from.cur):0;
-      const drop=1-conv;
-      transitions.push({from,to,conv,drop});
-    }
-    // Find biggest drop so we can highlight it (ignoring stages where previous was 0).
-    let maxDrop=-1,maxIdx=-1;
-    transitions.forEach((t,i)=>{if(t.from.cur>0&&t.drop>maxDrop){maxDrop=t.drop;maxIdx=i}});
-
-    html+=`<div class="funnel-title" style="margin-top:22px;margin-bottom:10px">Conversions &middot; stage to stage</div>`;
-    html+=`<div class="funnel-conv-list">`;
-    transitions.forEach((t,i)=>{
-      const isWorst=i===maxIdx;
-      const convPct=t.from.cur>0?(t.conv*100).toFixed(1)+"%":"—";
-      const dropPct=t.from.cur>0?(t.drop*100).toFixed(1)+"% drop":"—";
-      html+=`<div class="funnel-conv-row${isWorst?' worst':''}">
-        <div class="conv-pair"><span class="conv-from">${esc(t.from.label)}</span><span class="conv-arrow">→</span><span class="conv-to">${esc(t.to.label)}</span></div>
-        <div class="conv-metrics">
-          <span class="conv-rate">${convPct}</span>
-          <span class="conv-drop">${dropPct}</span>
-          ${isWorst?'<span class="conv-badge">biggest drop</span>':''}
-        </div>
-      </div>`;
-    });
-    html+=`</div>`;
-  }
-
   host.innerHTML=html;
   wireFunnelStageDragDrop(tab,host);
 }
