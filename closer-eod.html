@@ -25,6 +25,9 @@
   .hero h1 .gold{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .subline{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap}
   .subline .dia{color:var(--gold);font-size:9px}
+  .date-picker{background:rgba(255,255,255,.04);color:var(--txt);border:1px solid var(--line-str);border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit;cursor:pointer;color-scheme:dark}
+  .date-picker:focus{outline:none;border-color:var(--gold)}
+  .date-picker:hover{border-color:rgba(216,169,79,.5)}
   .divider{height:1px;max-width:620px;margin:28px auto 0;background:linear-gradient(90deg,transparent,rgba(216,169,79,.35),transparent)}
   .callout{margin:34px 0 8px;background:linear-gradient(165deg,rgba(216,169,79,.08),rgba(216,169,79,.02));border:1px solid rgba(216,169,79,.28);border-radius:12px;padding:15px 18px;font-size:13.5px;color:#e8e2d6;line-height:1.55}
   .callout b{color:var(--gold-lite)}
@@ -116,7 +119,7 @@
 
   <div class="hero">
     <h1>End of Day <span class="gold">Report</span></h1>
-    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <span id="dateLbl"></span> <span class="dia">◆</span> <span id="srcLbl"></span></div>
+    <div class="subline"><span id="who">George</span> <span class="dia">◆</span> <input type="date" id="datePicker" class="date-picker"> <span class="dia">◆</span> <span id="srcLbl"></span></div>
     <div class="divider"></div>
   </div>
 
@@ -181,9 +184,22 @@ function band(s){return s>=85?"s-top":s>=65?"s-strong":s>=45?"s-partial":s>=25?"
 
 let noShows=[];
 let submitted=false;
-const dateKey=new Date().toISOString().slice(0,10);
-const dateLbl=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-$("dateLbl").textContent=dateLbl;
+// Date picker drives both the Fathom extract window (passed to /api/eod-extract
+// as ?date=YYYY-MM-DD) and the sheet row's date on submit. Defaults to today.
+// Supports backdating missed EODs — change the picker, calls re-fetch for that day.
+let dateKey=new Date().toISOString().slice(0,10);
+let dateLbl=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+$("datePicker").value=dateKey;
+// Allow backdating up to 60 days, no future dates.
+const today=new Date();today.setHours(0,0,0,0);
+const maxIso=today.toISOString().slice(0,10);
+const minDate=new Date(today);minDate.setDate(today.getDate()-60);
+$("datePicker").max=maxIso;
+$("datePicker").min=minDate.toISOString().slice(0,10);
+function updateDateLabel(){
+  const d=new Date(dateKey+"T00:00:00");
+  dateLbl=d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
 $("callCount").textContent=CALLS.length;
 
 function renderCalls(){
@@ -278,8 +294,9 @@ async function loadSaved(){
 
 async function loadCalls(){
   try{
-    // Pass ?closer=<name> so the backend picks the right Fathom email to filter by.
-    const r=await fetch(API_BASE+"/api/eod-extract?closer="+encodeURIComponent(CLOSER));
+    // Pass ?closer=<name> and ?date=YYYY-MM-DD so the backend picks the right
+    // Fathom email AND filters to the selected day (today or a backdated one).
+    const r=await fetch(API_BASE+"/api/eod-extract?closer="+encodeURIComponent(CLOSER)+"&date="+encodeURIComponent(dateKey));
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();
     if(d.error)throw new Error(d.error);
@@ -292,13 +309,37 @@ async function loadCalls(){
   $("srcLbl").textContent="Fathom · "+CALLS.length+" calls";
 }
 
+// When the date picker changes: update dateKey/label, re-pull Fathom for that
+// day, reset the form state (so a previously submitted day doesn't leak into
+// a backdated one), then re-render + try to load saved draft for the new day.
+async function onDateChange(){
+  const v=$("datePicker").value;
+  if(!v||v===dateKey)return;
+  dateKey=v;
+  updateDateLabel();
+  // Reset submission state so backdating starts fresh
+  submitted=false;lock(false);
+  $("submitBtn").textContent="Submit EOD";$("submitBtn").classList.remove("done");
+  $("status").textContent="";$("reopenBtn").style.display="none";
+  // Reset counts since they belong to the previous date
+  noShows=[];syncNoShow();
+  AUTO.forEach(([id])=>{if($(id))$(id).value=0});
+  if($("m_cancel"))$("m_cancel").value=0;
+  $("callout").innerHTML=`<b id="pingTag">@${CLOSER_DISP}</b> — loading <b id="callCount">...</b> Fathom calls for ${dateLbl}. Review and verify, then submit.`;
+  await loadCalls();
+  renderCalls();renderAuto();renderChips();updateSummary();
+  loadSaved();
+}
+
 async function init(){
+  updateDateLabel();
   await loadCalls();
   renderCalls();renderAuto();renderChips();updateSummary();
   $("nsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.value.trim()){noShows.push(e.target.value.trim());e.target.value="";syncNoShow()}});
   $("m_noshow").addEventListener("input",updateSummary);
   $("submitBtn").onclick=()=>{if(!submitted)doSubmit()};
   $("reopenBtn").onclick=reopen;
+  $("datePicker").addEventListener("change",onDateChange);
   loadSaved();
 }
 window.addEventListener("load",init);
